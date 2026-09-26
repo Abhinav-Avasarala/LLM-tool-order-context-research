@@ -1,0 +1,114 @@
+# The frozen 32-tool catalog structure (brief section 2): 4 domains x 8 tools,
+# each domain split into 2 groups of 4 related tools. Every `original_name`
+# must exist verbatim in BFCL_v3_multiple.json or BFCL_v3_live_multiple.json.
+#
+# Curated by hand (with Claude's help) from the ~891 unique normalizable
+# tools across those two files, deliberately dropping literal near-duplicates
+# BFCL contains under different names (e.g. weather.get / weather.get_weather
+# / weather.get_weather_data all do the same thing; math.gcd / math.hcf are
+# the same operation). See docs/decision_log.md for the full rationale and
+# the one deliberately loose fit (car_rental, grouped with property tools).
+tools:
+  # --- Domain: Physics Calculators ---
+  - original_name: kinematics.calculate_displacement
+    domain: physics_calculators
+    group: kinematics
+  - original_name: kinematics.calculate_final_speed
+    domain: physics_calculators
+    group: kinematics
+  - original_name: kinematics.calculate_acceleration
+    domain: physics_calculators
+    group: kinematics
+  - original_name: kinematics.calculate_speed_from_rest
+    domain: physics_calculators
+    group: kinematics
+  - original_name: capacitance_calculator.calculate
+    domain: physics_calculators
+    group: electromagnetism
+  - original_name: resistance_calculator.calculate
+    domain: physics_calculators
+    group: electromagnetism
+  - original_name: magnetic_field.calculate
+    domain: physics_calculators
+    group: electromagnetism
+  - original_name: electric_field.calculate
+    domain: physics_calculators
+    group: electromagnetism
+
+  # --- Domain: Geography & Weather ---
+  - original_name: country_info.capital
+    domain: geography_weather
+    group: places_and_travel
+  - original_name: country_info.largest_city
+    domain: geography_weather
+    group: places_and_travel
+  - original_name: country_info.population
+    domain: geography_weather
+    group: places_and_travel
+  - original_name: maps.get_distance_duration
+    domain: geography_weather
+    group: places_and_travel
+  - original_name: weather.get
+    domain: geography_weather
+    group: weather
+  - original_name: weather.get_forecast_by_coordinates
+    domain: geography_weather
+    group: weather
+  - original_name: weather.get_by_coordinates_date
+    domain: geography_weather
+    group: weather
+  - original_name: weather.humidity_forecast
+    domain: geography_weather
+    group: weather
+
+  # --- Domain: Finance & Economics ---
+  - original_name: corporate_finance.calculate_YOY_growth_rate
+    domain: finance_economics
+    group: corporate_finance
+  - original_name: corporate_finance.product_price
+    domain: finance_economics
+    group: corporate_finance
+  - original_name: corporate_finance.revenue_forecast
+    domain: finance_economics
+    group: corporate_finance
+  - original_name: corporate_finance.dividend_data
+    domain: finance_economics
+    group: corporate_finance
+  - original_name: finance.loan_repayment
+    domain: finance_economics
+    group: personal_finance
+  - original_name: finance.inflation_adjustment
+    domain: finance_economics
+    group: personal_finance
+  - original_name: finance.calculate_future_value
+    domain: finance_economics
+    group: personal_finance
+  - original_name: currency_conversion.convert
+    domain: finance_economics
+    group: personal_finance
+
+  # --- Domain: Property & Environment ---
+  - original_name: realestate.find_properties
+    domain: property_environment
+    group: property_and_rentals
+  - original_name: property_valuation.get
+    domain: property_environment
+    group: property_and_rentals
+  - original_name: finance.property_depreciation
+    domain: property_environment
+    group: property_and_rentals
+  - original_name: car_rental
+    domain: property_environment
+    group: property_and_rentals
+  - original_name: solarFarm.potential
+    domain: property_environment
+    group: environmental_impact
+  - original_name: windFarm.potential
+    domain: property_environment
+    group: environmental_impact
+  - original_name: ecological_impact.analyze
+    domain: property_environment
+    group: environmental_impact
+  - original_name: wildlife_population.assess_growth
+    domain: property_environment
+    group: environmental_impact

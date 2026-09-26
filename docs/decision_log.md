@@ -86,3 +86,44 @@ release, ~31GB), `--max-model-len 8192`.** Matches the brief's "test one
 L40S first" guidance for the dev model; 8192 tokens is far more than Phase
 2's `H0` (no-history) conditions need (32 short tool schemas + one short
 question), revisit when H16N/H64N/H64I histories are implemented.
+
+## 2026-09-26 — Phase 3 (catalog + dev tasks)
+
+**32-tool catalog (`configs/catalog_spec.yaml`): curated by hand from BFCL's
+~891 unique normalizable tools, deliberately dropping literal near-duplicates.**
+BFCL contains many tools that do the same thing under different names --
+e.g. `weather.get` / `weather.get_weather` / `weather.get_weather_data` are
+all "current temperature/wind/precipitation for a place," and `math.gcd` /
+`math.hcf` are literally the same operation (GCD = HCF). Including both
+members of such a pair in the catalog would violate the brief's "manually
+check that each tool has a distinct purpose," so exactly one of each was
+kept. Final structure: 4 domains (Physics Calculators, Geography & Weather,
+Finance & Economics, Property & Environment) x 2 groups x 4 tools. One
+deliberately loose fit: `car_rental` sits in the "Property & Rentals" group
+(alongside real-estate tools) for lack of a fourth genuine real-estate tool
+in BFCL's `multiple`/`live_multiple` categories -- grouped as "things you
+rent or value" rather than strictly real estate. User reviewed and approved
+this catalog before it was written to `data/catalog/tools.jsonl`.
+
+**24 dev tasks are a 20+4 mix, not 24 uniform BFCL reuses, because 14 of
+the 32 catalog tools never appear as the sole correct answer anywhere in
+BFCL_v3_multiple.json / BFCL_v3_live_multiple.json** (verified by direct
+grep of the raw files, not just parsing logic) -- they only ever appear as
+*distractor* options in questions whose gold is a different tool. Genuine
+reuse tops out at 20 questions covering 18 tools (`weather.get` alone
+contributes 3 of the 20, since it had 3 usable candidates). Given the
+choice to accept 20 or pad to ~24, the user chose to pad: 4 more tasks
+(`electric_field.calculate`, `country_info.population`,
+`finance.loan_repayment`, `windFarm.potential` -- one per domain, chosen to
+maximize domain/group coverage) were freshly authored against those tools'
+real parameter schemas. These are tagged `authoring_source: dev_only_authored`
+and are explicitly **not** held to the final-96 authoring bar (no independent
+review pass) and must never be reused as final-set questions. Net dev-set
+coverage: 22 of 32 catalog tools have at least one dev question; the other
+10 (`kinematics.calculate_final_speed`, `kinematics.calculate_acceleration`,
+`resistance_calculator.calculate`, `country_info.largest_city`,
+`weather.get_forecast_by_coordinates`, `corporate_finance.product_price`,
+`finance.inflation_adjustment`, `property_valuation.get`, `car_rental`,
+`ecological_impact.analyze`) have none in the dev set -- acceptable since
+dev-set purpose is pipeline/pilot debugging, not full coverage (full
+coverage is the final 96-question set's job, 3 fresh questions per tool).

@@ -19,8 +19,15 @@ chat-template prompt (not just our own condition-builder) preserves all 32
 tool names, in the declared order, with the gold tool at the declared
 position. See `docs/decision_log.md` for choices made along the way
 (notably: vLLM/torch/transformers version pinning for this GPU driver).
-Phases 3-5 (curated catalog, history assembly, final task set, full model
-runs) are not yet implemented.
+**Phase 3 (catalog curation + dev tasks) — in progress.** Curated and
+user-approved the real 32-tool catalog (4 domains x 2 groups x 4 tools,
+`configs/catalog_spec.yaml` -> `data/catalog/tools.jsonl`), and built the
+24-question development set (`data/development/tasks.jsonl`): 20 questions
+reused from BFCL + 4 freshly authored where BFCL had zero ground-truth
+coverage for a catalog tool (see `docs/decision_log.md`). Remaining Phase 3
+steps: episode banks (neutral + interfering), assembling the four history
+conditions, and running Qwen/smoke-testing GPT-OSS across the dev set.
+Phases 4-5 (final 96-question set, full model runs) are not yet implemented.
 
 ## Setup
 
@@ -68,6 +75,12 @@ python -m tool_context_study.run_model \
 python -m tool_context_study.score \
   --results results/raw/phase2_dev5_qwen3_30b_a3b_fp8.jsonl \
   --conditions data/conditions/phase2_dev5.jsonl
+```
+
+Build the Phase 3 curated 32-tool catalog + 24-question dev set:
+
+```bash
+python -m tool_context_study.phase3_catalog_and_dev_tasks
 ```
 
 ## Frozen design
