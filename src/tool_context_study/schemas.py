@@ -82,6 +82,31 @@ class ConditionRecord(BaseModel):
     tools: list[dict[str, Any]]
 
 
+class AssembledHistory(BaseModel):
+    """One materialized conversation history (brief section 6).
+
+    `H64N` is built directly from the neutral episode bank. `H16N` is
+    derived as the most-recent token-suffix of a specific `H64N` (never
+    built independently, to satisfy the brief's "H16N is the same recent
+    history found in H64N" requirement). `H64I` is one per `target_group`,
+    derived from a specific `H64N` by swapping ~25% of its episodes (by
+    token mass) for that group's interference episodes.
+    """
+
+    history_id: str
+    history_condition: HistoryConditionId
+    target_group: str | None = Field(default=None, description="Set only for H64I")
+    derived_from: str | None = Field(default=None, description="history_id of the H64N this was built/trimmed from")
+    seed: int
+    episode_ids: list[str] = Field(description="Neutral/interference episode ids, in conversation order")
+    interference_episode_ids: list[str] = Field(default_factory=list)
+    replaced_neutral_episode_ids: list[str] = Field(default_factory=list)
+    messages: list[dict[str, Any]]
+    token_count: int
+    token_count_model: str
+    n_messages: int
+
+
 class ResultRecord(BaseModel):
     """One model generation result (brief section 9)."""
 
