@@ -1,0 +1,27 @@
+# Development model (brief section 7).
+model_id: "Qwen/Qwen3-30B-A3B-Instruct-2507-FP8"
+served_model_name: "qwen3-30b-a3b-instruct-2507-fp8"
+serving_framework: "vllm"
+vllm_version: "0.10.0"
+torch_version: "2.7.1+cu126"
+transformers_version: "<5.0.0,>=4.53.2"  # see docs/decision_log.md: transformers 5.x breaks vllm 0.10.0's tokenizer cache
+tool_call_parser: "hermes"   # Qwen's chat template emits <tool_call>{"name":...,"arguments":...}</tool_call>,
+                              # the same format Hermes-style models use; vLLM 0.10.0 has no qwen3-specific
+                              # parser (only qwen3_coder, which uses a different tool-call format).
+gpu: "1x NVIDIA L40S (CUDA_VISIBLE_DEVICES pinned to a single idle GPU on the shared host)"
+max_model_len: 8192   # Phase 2 only needs H0 (no history); revisit for H16N/H64N/H64I phases.
+gpu_memory_utilization: 0.85
+decoding:
+  temperature: 0.0
+  max_tokens: 256
+
+launch_command: >
+  HF_HOME=/home/aavasar/hf_cache CUDA_VISIBLE_DEVICES=1
+  python -m vllm.entrypoints.openai.api_server
+  --model Qwen/Qwen3-30B-A3B-Instruct-2507-FP8
+  --served-model-name qwen3-30b-a3b-instruct-2507-fp8
+  --enable-auto-tool-choice
+  --tool-call-parser hermes
+  --max-model-len 8192
+  --gpu-memory-utilization 0.85
+  --port 8000

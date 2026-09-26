@@ -8,9 +8,19 @@ this README tracks implementation status and setup.
 
 ## Status
 
-**Phase 1 (BFCL ingestion) — done.** See `docs/decision_log.md` for choices
-made along the way. Phases 2-5 (tool catalog, history assembly, final task
-set, model runs) are not yet implemented.
+**Phase 1 (BFCL ingestion) — done.**
+**Phase 2 (five-task vertical slice) — done.** Built a provisional 32-tool
+catalog + 5 dev tasks from BFCL, generated position-1/position-32 conditions
+under `H0`, served `Qwen/Qwen3-30B-A3B-Instruct-2507-FP8` on one L40S via
+vLLM, ran all 10 conditions, and scored them (10/10 correct on this easy
+pilot slice — expected, and not a real result; the point was proving the
+pipeline works, not measuring anything). Verified the actual rendered
+chat-template prompt (not just our own condition-builder) preserves all 32
+tool names, in the declared order, with the gold tool at the declared
+position. See `docs/decision_log.md` for choices made along the way
+(notably: vLLM/torch/transformers version pinning for this GPU driver).
+Phases 3-5 (curated catalog, history assembly, final task set, full model
+runs) are not yet implemented.
 
 ## Setup
 
@@ -36,6 +46,28 @@ Run tests:
 
 ```bash
 pytest
+```
+
+Build the Phase 2 five-task dev slice (provisional 32-tool catalog + 5 dev
+tasks + position-1/32 conditions under `H0`):
+
+```bash
+python -m tool_context_study.phase2_dev_slice
+```
+
+Serve the dev model (see `configs/models/qwen3_30b_a3b_instruct_2507_fp8.yaml`
+for the exact launch command and version pins this required on this host),
+then run and score the slice against it:
+
+```bash
+python -m tool_context_study.run_model \
+  --conditions data/conditions/phase2_dev5.jsonl \
+  --model qwen3-30b-a3b-instruct-2507-fp8 \
+  --output results/raw/phase2_dev5_qwen3_30b_a3b_fp8.jsonl
+
+python -m tool_context_study.score \
+  --results results/raw/phase2_dev5_qwen3_30b_a3b_fp8.jsonl \
+  --conditions data/conditions/phase2_dev5.jsonl
 ```
 
 ## Frozen design
