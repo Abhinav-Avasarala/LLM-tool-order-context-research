@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+src/*.egg-info/
+
+# Raw downloaded BFCL data is fetched by src/ingest_bfcl.py, not committed.
+data/raw/bfcl/*
+!data/raw/bfcl/.gitkeep
+
+# Large generated artifacts (recreated by later phases).
+results/raw/*
+results/processed/*
+!results/raw/.gitkeep
+!results/processed/.gitkeep

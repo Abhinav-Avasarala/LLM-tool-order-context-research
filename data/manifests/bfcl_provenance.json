@@ -1,0 +1,29 @@
+{
+  "dataset_repo": "gorilla-llm/Berkeley-Function-Calling-Leaderboard",
+  "dataset_revision": "61fc0608cfd831fcfbbaa676ebdfef0ed963eeda",
+  "repo_type": "dataset",
+  "github_repo": "https://github.com/ShishirPatil/gorilla",
+  "retrieved_at": "2026-09-26T17:46:20.502786+00:00",
+  "files": [
+    {
+      "filename": "BFCL_v3_multiple.json",
+      "sha256": "aef168155ebd74b7ac2401198b201343bc7d16d7a3d7e0d4e6d8ee82c6969b2a",
+      "n_bytes": 316583
+    },
+    {
+      "filename": "possible_answer/BFCL_v3_multiple.json",
+      "sha256": "244e00ce9395df948bcafc7bee64e8f9c87ef70887587d83cae45b13699f3047",
+      "n_bytes": 32254
+    },
+    {
+      "filename": "BFCL_v3_live_multiple.json",
+      "sha256": "af2520ac5bb0b05aa9b8abe14a79b87198e5a3137a707d4f5633c792330f0cee",
+      "n_bytes": 3891342
+    },
+    {
+      "filename": "possible_answer/BFCL_v3_live_multiple.json",
+      "sha256": "97e90d59c5bd76c55a2920ce93e5566e9046307d3f558578f085f9d3a56c3084",
+      "n_bytes": 199668
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+# Top-level experiment configuration.
+# Phase 1 (this file's current state): only the `bfcl` section is load-bearing.
+# Later phases will fill in catalog / history / model fields as those phases
+# are implemented -- do not hand-edit sizes here without updating the brief's
+# frozen design (see project README "Frozen design" section).
+
+bfcl:
+  # Official sources (see brief section 4). We pull from the HF dataset
+  # mirror because, unlike the gorilla GitHub repo (which has moved on to
+  # v4 files as of 2026-09-26), it still hosts the exact v3 files the brief
+  # names, at a revision we can pin.
+  dataset_repo: "gorilla-llm/Berkeley-Function-Calling-Leaderboard"
+  dataset_revision: "61fc0608cfd831fcfbbaa676ebdfef0ed963eeda"
+  repo_type: "dataset"
+  github_repo: "https://github.com/ShishirPatil/gorilla"
+  # Files reused for development-set ingestion (brief section 4).
+  files:
+    - "BFCL_v3_multiple.json"
+    - "possible_answer/BFCL_v3_multiple.json"
+    - "BFCL_v3_live_multiple.json"
+    - "possible_answer/BFCL_v3_live_multiple.json"
+
+# --- Not yet implemented (filled in by later phases) ---
+catalog:
+  n_domains: 4
+  n_tools_per_domain: 8
+  n_groups_per_domain: 2
+  n_tools_per_group: 4
+  n_tools_total: 32
+
+positions: [1, 16, 32]
+
+history_conditions: ["H0", "H16N", "H64N", "H64I"]
+history_token_targets:
+  H16N: 16000
+  H64N: 64000
+  H64I: 64000
+interference_fraction: 0.25
+
+final_set:
+  n_tools: 32
+  n_questions_per_tool: 3
+
+development_set:
+  n_questions: 24
+
+seeds:
+  base_seed: 20260926

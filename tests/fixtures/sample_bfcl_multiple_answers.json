@@ -1,0 +1,2 @@
+{"id": "multiple_0", "ground_truth": [{"triangle_properties.get": {"side1": [5], "side2": [4], "side3": [3], "get_area": ["", true]}}]}
+{"id": "multiple_2", "ground_truth": [{"country_info.capital": {"country": ["Brazil"]}}]}
