@@ -24,10 +24,18 @@ user-approved the real 32-tool catalog (4 domains x 2 groups x 4 tools,
 `configs/catalog_spec.yaml` -> `data/catalog/tools.jsonl`), and built the
 24-question development set (`data/development/tasks.jsonl`): 20 questions
 reused from BFCL + 4 freshly authored where BFCL had zero ground-truth
-coverage for a catalog tool (see `docs/decision_log.md`). Remaining Phase 3
-steps: episode banks (neutral + interfering), assembling the four history
-conditions, and running Qwen/smoke-testing GPT-OSS across the dev set.
-Phases 4-5 (final 96-question set, full model runs) are not yet implemented.
+coverage for a catalog tool (see `docs/decision_log.md`). Generated the
+episode banks: 250 neutral episodes and 440 interference episodes (55 per
+target group x 8 groups) in `data/histories/episodes/`, sized against the
+frozen H64N/H64I token targets rather than the brief's raw episode-count
+guidance (see `docs/decision_log.md` for the sizing math and two corrected
+generation-quality issues). **Not yet done for this data:** the brief's
+required manual review pass over the interference episodes (only automated
+checks have run so far) and the token-count top-up for `personal_finance`,
+the thinnest-margin group. Remaining Phase 3 steps: assembling the four
+history conditions from these banks, and running Qwen/smoke-testing
+GPT-OSS across the dev set. Phases 4-5 (final 96-question set, full model
+runs) are not yet implemented.
 
 ## Setup
 

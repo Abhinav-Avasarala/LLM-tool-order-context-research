@@ -127,3 +127,77 @@ coverage: 22 of 32 catalog tools have at least one dev question; the other
 `ecological_impact.analyze`) have none in the dev set -- acceptable since
 dev-set purpose is pipeline/pilot debugging, not full coverage (full
 coverage is the final 96-question set's job, 3 fresh questions per tool).
+
+## 2026-09-26 — Phase 3 (episode banks)
+
+**Generated via `general-purpose` subagents with the persona/instructions
+from `.claude/agents/episode-writer-neutral.md` and
+`.claude/agents/episode-writer-interference.md` inlined into each prompt,
+not via those agent types directly.** This session's harness did not have
+those project-local custom subagent types registered as invocable (`Agent`
+calls to `episode-writer-neutral` / `episode-writer-interference` errored
+with "agent type not found"); functionally equivalent since the agent
+definitions are just system-prompt files, but noted here in case a future
+session finds those custom types *do* resolve and wants to use them
+directly instead.
+
+**Bank sizes are derived from the frozen H64N/H64I token targets, not
+directly from the brief's "~200-300 episodes" neutral-bank guidance.**
+Given `history_token_targets.H64N: 64000` and `interference_fraction: 0.25`
+(`configs/experiment.yaml`), assembling one non-mechanically-repeated H64N
+history requires the neutral pool to hold at least 64K tokens of content,
+and assembling H64I for a given target group requires that group's
+interference pool to hold at least 16K tokens (25% of 64K). A first
+generation pass (200 neutral + 240 interference, 30/group) undershot this
+badly: subagents wrote much shorter episodes than instructed (the "220-650
+words" instruction was treated as a soft ceiling rather than a target
+range -- actual average landed near 195 words instead of ~435), leaving
+the entire 200-episode neutral pool at only ~53K tokens (short of the 64K
+needed for even one history) and every interference group short of its
+16K minimum. A corrective second wave (50 more neutral episodes,
+25 more per interference group) with an explicit hard length floor ("every
+episode >= 400 words, land in 450-650, use 4-6 messages") brought the pool
+to 250 neutral episodes (~90.6K tokens, 1.42x the 64K minimum) and 55
+episodes per interference group (~20.5K-34.9K tokens per group, 1.28x-2.18x
+the 16K minimum). Written to `data/histories/episodes/neutral.jsonl` (250
+lines) and `data/histories/episodes/interference_<group>.jsonl` (one file
+per of the 8 groups, 55 lines each, 440 total). Token counts here are a
+`words * 1.35` estimate for planning purposes only -- `build_conditions.py`
+must still count actual tokens with each evaluated model's own tokenizer
+per the brief, and if real ratios come in lower than estimated, top up the
+thinnest group (`personal_finance`, currently the smallest margin at
+1.28x) before relying on it for assembly.
+
+**Two subagent JSON-formatting defects were repaired programmatically
+rather than by discarding/regenerating the batch:** one neutral-episode
+batch (`neutral_0201`-`0250`) used unescaped literal `"` characters for
+emphasis inside message text, breaking JSON string termination; repaired
+with a small custom parser that treats a `"` as content (and escapes it)
+unless it's immediately followed by `,`/`}`/`]`/`:` (i.e. looks like a real
+string terminator) -- all 50 records recovered and re-validated as
+structurally correct JSON afterward. One `corporate_finance` interference
+batch had two lines with a raw literal newline inside a string value;
+recovered by re-parsing with `json.loads(..., strict=False)`. Both fixes
+were mechanical (whitespace/escaping only) and did not alter any actual
+episode content. Separately, 4 episodes across 3 groups
+(`corporate_finance`, `electromagnetism`, `environmental_impact`) had a
+`topic` slug collide with a same-group episode from the other generation
+wave (independent agent calls, so cross-wave topic uniqueness wasn't
+enforced) -- confirmed the underlying conversations were genuinely
+different scenarios, not duplicated content, and just renamed the
+second occurrence's slug with a `_v2` suffix.
+
+**Interference-bank content has only been automated-checked, not
+manually reviewed, despite the brief's explicit "every interfering episode
+should be manually reviewed" requirement.** Ran two automated passes across
+all 440 interference episodes: (1) a literal-substring search for all 32
+tools' `original_name` fragments from `configs/catalog_spec.yaml` (0 hits),
+and (2) a regex heuristic for tool-invocation-shaped assistant answers
+(patterns like "the current weather is...", "the distance is... miles",
+"the capital of X is...", "your monthly payment would be $...") (0 hits).
+Neither pass is a substitute for the brief's required human review pass
+-- a human still needs to read through (at least a sample of) the 440
+interference episodes before they're treated as final, specifically
+checking for subtler cases the regex heuristics can't catch (e.g. an
+episode that gets uncomfortably close to actually answering the
+tool's question in prose without using a flagged phrase).
