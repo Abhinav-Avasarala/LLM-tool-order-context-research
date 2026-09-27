@@ -45,4 +45,7 @@ development_set:
   n_questions: 24
 
 seeds:
-  base_seed: 20260926
+  base_seed: 20260926   # Phase 2/3 dev-pilot histories + conditions.
+  final_seed: 20260927  # Phase 4 frozen final-set histories + conditions -- deliberately distinct
+                         # from base_seed so the frozen set is an independent assembly, not a
+                         # re-listing of the already-inspected dev-pilot histories.

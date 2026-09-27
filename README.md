@@ -33,10 +33,61 @@ directionally consistent with the brief's hypotheses (accuracy declines as
 history grows; position effects sharpen specifically under H64I). This is
 a small-n pilot, not a result — see `docs/decision_log.md` and
 `results/processed/phase3_dev_grid_qwen3_30b_a3b_fp8_summary.json`.
-**Not yet done:** the brief's required manual review pass over all
-interference episodes (only automated + spot checks so far). Remaining
-Phase 3 step: smoke-test GPT-OSS-20B/120B. Phases 4-5 (final 96-question
-set, full model runs) are not yet implemented.
+Smoke-tested both GPT-OSS models (separate `tool_ctx_gptoss` conda env,
+`vllm==0.10.1.1` — the earliest release with gpt-oss support that still
+matches this host's CUDA/driver pins): 10/10 correct on the same Phase 2
+five-task dev slice for both `gpt-oss-20b` and `gpt-oss-120b`. Getting there
+required three real fixes, all logged in detail in `docs/decision_log.md`:
+(1) GPT-OSS tool-calling over `/v1/chat/completions` crashes deterministically
+whenever the model actually emits a tool call (likely root cause: vLLM's
+harmony prompt-builder for that endpoint never passes the tool schemas into
+the model at all) — switched to `/v1/responses` instead via a new
+`parsers/harmony_responses_call.py` adapter and `run_model.py --api-format
+responses` flag; (2) `gpt-oss-120b`'s tensor-parallel (2×L40S) startup hangs
+indefinitely on this no-NVLink host without `--enforce-eager
+--disable-custom-all-reduce`; (3) `/v1/responses`' `usage` field always
+reports zero token counts — fixed by reimplementing gpt-oss's harmony
+prompt construction client-side (`parsers/harmony_token_count.py`, using
+the `openai_harmony` library directly) rather than trusting that field.
+All 440 interference episodes have since been manually reviewed and
+approved by the user (see the Phase 4 entry below) — **Phase 3 is done.**
+Still outstanding, non-blocking: bisecting which of the three gpt-oss-120b
+startup flags were actually necessary (all three were changed at once to
+get unblocked).
+
+**Phase 4 (final 96-question set, histories, freeze) — done.** 96 fresh
+questions (3 per tool) drafted by 8 parallel subagents against the real
+32-tool catalog (`.claude/agents/final-question-writer.md`), reviewed and
+approved by the user via a published Artifact backed by its `db`
+capability, synced to `data/final/tasks.jsonl` with
+`review_status: "approved"`. All 440 interference episodes separately
+reviewed and approved by the user via a second Artifact
+(`src/tool_context_study/check_interference_episodes.py` for the
+automated pre-check; 1 of 440 flagged, confirmed a false positive).
+Assembled fresh final-set histories with a dedicated `final_seed`
+(distinct from the dev pilot's `base_seed`) — this surfaced and fixed a
+genuine authoring defect in the neutral episode bank (`neutral_0083`
+ended on a `user` turn; the dev pilot's seed had never exposed it). Built
+and validated the full 1,152-condition frozen grid (96 tasks × 4 history
+conditions × 3 positions; `phase4_build_final_conditions.py`) — exactly
+288/384/36-way uniform as required. Re-verified Phase 2's rendered-prompt
+rigor at final scale through Qwen's real tokenizer (all 32 tools present
+once, order preserved, gold tool at declared position, no truncation;
+largest condition renders to 71,900 tokens, comfortably under the
+already-proven 80,000 context window). Decided the two remaining open
+protocol items from the brief's "still open" list: interference fraction
+reaffirmed at 25% (final), and a predefined annotation-defect policy
+(exclude-and-log, never edit a frozen task). Froze everything via
+`freeze_phase4.py` → `data/manifests/phase4_freeze.json` (hashes +
+frozen design parameters). See `docs/decision_log.md` for full detail on
+every decision above.
+
+**Forward note for Phase 5:** GPT-OSS has only been smoke-tested at
+`--max-model-len 8192` (H0 only) — it needs the same context-window
+increase Qwen already got (to ≥80,000) before it can serve H64N/H64I
+conditions at final scale.
+
+**Phase 5 (full model runs, analysis) — not yet started.**
 
 ## Setup
 
@@ -92,6 +143,51 @@ Build the Phase 3 curated 32-tool catalog + 24-question dev set:
 python -m tool_context_study.phase3_catalog_and_dev_tasks
 ```
 
+Assemble history conditions (dev-pilot set, the default; pass
+`--seed-key final_seed --id-prefix history_final` for the frozen final set
+instead — already done, output committed under `data/histories/assembled/`):
+
+```bash
+python -m tool_context_study.build_histories
+```
+
+Build the frozen final condition grid (96 tasks × 4 history × 3 positions;
+requires every row in `data/final/tasks.jsonl` to be `review_status:
+"approved"`):
+
+```bash
+python -m tool_context_study.phase4_build_final_conditions
+```
+
+Re-check the interference episode bank for literal tool-name leakage or
+answer-shaped replies (writes `data/histories/episodes/interference_flags.json`):
+
+```bash
+python -m tool_context_study.check_interference_episodes
+```
+
+Re-generate the Phase 4 freeze manifest (only if a frozen input file
+legitimately changes — see the annotation-defect policy in
+`docs/decision_log.md` first):
+
+```bash
+python -m tool_context_study.freeze_phase4
+```
+
+Serve and run a model against any condition file (`--api-format responses
+--reasoning-effort low` are GPT-OSS-only; omit both for Qwen):
+
+```bash
+python -m tool_context_study.run_model \
+  --conditions data/conditions/final_grid.jsonl \
+  --model <served-model-name> \
+  --output results/raw/<output-name>.jsonl
+
+python -m tool_context_study.score \
+  --results results/raw/<output-name>.jsonl \
+  --conditions data/conditions/final_grid.jsonl
+```
+
 ## Frozen design
 
 The experimental design (32-tool catalog, positions 1/16/32, history
@@ -104,16 +200,40 @@ made.
 ## Repository layout
 
 ```
-configs/            experiment + per-model configuration
-data/raw/bfcl/       BFCL files downloaded by ingest_bfcl.py (gitignored, reproducible via manifest)
-data/manifests/      provenance manifests (BFCL revision + file hashes)
-data/catalog/        the 32-tool catalog (Phase 3)
-data/development/    ~24-question development set (Phase 3)
-data/final/          96-question frozen final set (Phase 4)
-data/histories/       episode banks + assembled histories (Phase 3)
-data/conditions/     materialized model-input records (Phase 4)
-src/tool_context_study/   project source
-tests/               unit tests + tiny fixtures
-results/             raw + processed model outputs (Phase 5)
-analysis/            notebooks (Phase 5)
+docs/research_brief.md          the experimental design spec (authoritative)
+docs/decision_log.md            every non-obvious choice made, and why
+
+configs/experiment.yaml         seeds, token targets, interference fraction, catalog shape
+configs/catalog_spec.yaml       the 32-tool catalog's domain/group assignment (hand-curated)
+configs/models/*.yaml           one per model: exact serving command + version pins
+
+data/raw/bfcl/                  BFCL files (gitignored; reproducible via the manifest below)
+data/manifests/bfcl_provenance.json   BFCL revision + file hashes
+data/manifests/phase4_freeze.json     Phase 4 freeze: hashes of every frozen input + design params
+data/catalog/tools.jsonl        the 32-tool catalog, normalized (NormalizedToolSchema)
+data/development/tasks.jsonl    24-question dev set (Phase 3; freely revisable, not frozen)
+data/final/tasks.jsonl          96 frozen final questions (FinalTaskRecord) -- do not edit
+data/histories/episodes/        neutral (250) + interference (440, 8 groups) episode banks
+data/histories/assembled/       assembled H64N/H16N/H64I histories --
+                                 `history_*` = dev pilot, `history_final_*` = frozen final set
+data/conditions/phase3_dev_grid.jsonl   288-condition dev-pilot grid
+data/conditions/final_grid.jsonl        1,152-condition frozen final grid -- do not edit
+
+src/tool_context_study/schemas.py             all project-owned record shapes
+src/tool_context_study/build_histories.py     assembles H64N/H16N/H64I from episode banks
+src/tool_context_study/build_conditions.py    position-controlled ConditionRecord builder
+src/tool_context_study/phase4_build_final_conditions.py   builds the frozen 1,152-condition grid
+src/tool_context_study/check_interference_episodes.py     automated episode safety checks
+src/tool_context_study/freeze_phase4.py       writes the Phase 4 freeze manifest
+src/tool_context_study/run_model.py           sends conditions to a running server, saves results
+src/tool_context_study/score.py               primary tool-selection scoring
+src/tool_context_study/parsers/               per-API-format response parsers + GPT-OSS token counting
+
+.claude/agents/                 persona files used by subagents that generated project content
+                                 (episode banks, final questions) -- kept for reproducibility
+
+tests/                           unit tests + tiny fixtures (63 as of Phase 4)
+results/raw/                    raw per-condition model responses (gitignored, regenerable)
+results/processed/              scored/aggregated summaries (gitignored, regenerable)
+analysis/                       notebooks (Phase 5, not yet used)
 ```

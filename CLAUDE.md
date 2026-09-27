@@ -25,17 +25,26 @@ status: `README.md`.
 
 ## Environment
 
+Two separate conda envs -- do not mix them, and do not `pip install`
+gpt-oss's vllm version into `tool_ctx` or vice versa.
+
 ```bash
 source /home/aavasar/miniconda3/etc/profile.d/conda.sh
 conda activate tool_ctx   # Python 3.11, conda-forge channel (avoids anaconda.org ToS prompt)
 cd /home/aavasar/projects/tool_context_study
 pip install -e ".[dev]"   # if not already installed
-pytest                    # 40 tests as of Phase 2, tiny fixtures only
+pytest                    # 63 tests as of Phase 4, tiny fixtures only
 ```
 
-Model serving (vLLM) needs care on this host: the driver caps out at CUDA
-12.7, so a plain `pip install vllm` (which defaults to a CUDA 13 torch build)
-leaves `torch.cuda.is_available() == False`. Use:
+`tool_ctx` (above) is the client/dev env: the project package, Qwen serving,
+`run_model.py`, `score.py`, everything else. It also has `openai-harmony`
+installed (lightweight, no CUDA/torch dependency) purely so
+`parsers/harmony_token_count.py` can compute accurate GPT-OSS token counts
+client-side without needing vLLM itself.
+
+Qwen serving needs care on this host: the driver caps out at CUDA 12.7, so
+a plain `pip install vllm` (which defaults to a CUDA 13 torch build) leaves
+`torch.cuda.is_available() == False`. Use:
 
 ```bash
 pip install "vllm==0.10.0" --extra-index-url https://download.pytorch.org/whl/cu126
@@ -44,8 +53,29 @@ pip install "transformers<5.0.0,>=4.53.2"   # vllm 0.10.0's tokenizer cache brea
 
 See `configs/models/qwen3_30b_a3b_instruct_2507_fp8.yaml` for the exact
 serving command (model, tool-call parser, GPU placement) this produced.
-Shared 8x L40S machine, no NVLink — pin `CUDA_VISIBLE_DEVICES` to one idle
-GPU rather than defaulting to all of them, and shut servers down when not
+
+`tool_ctx_gptoss` is a **separate** env, Python 3.12, for serving GPT-OSS
+only (`vllm==0.10.0` predates gpt-oss support entirely):
+
+```bash
+conda create -n tool_ctx_gptoss -c conda-forge --override-channels python=3.12
+conda activate tool_ctx_gptoss
+pip install "vllm==0.10.1.1" --extra-index-url https://download.pytorch.org/whl/cu126
+pip install "transformers<5.0.0,>=4.55.0"
+```
+
+GPT-OSS also needs its own non-obvious serving choices -- see
+`configs/models/gpt_oss_20b.yaml` / `gpt_oss_120b.yaml` for exact launch
+commands, and `docs/decision_log.md`'s "Phase 3 (GPT-OSS smoke test)" entry
+for why: no `--tool-call-parser` flag exists or is needed for it; run
+`run_model.py` with `--api-format responses --reasoning-effort low`
+(`/v1/chat/completions` crashes on a real tool call under this vLLM
+version); `gpt-oss-120b`'s 2-GPU tensor-parallel startup needs
+`--enforce-eager --disable-custom-all-reduce` plus `NCCL_P2P_DISABLE=1` or
+it hangs indefinitely on this no-NVLink host.
+
+Shared 8x L40S machine, no NVLink — pin `CUDA_VISIBLE_DEVICES` to the idle
+GPU(s) rather than defaulting to all of them, and shut servers down when not
 actively in use.
 
 ## Key fixed parameters (see brief for full detail)
@@ -57,11 +87,44 @@ actively in use.
   (`src/tool_context_study/build_conditions.py`), never one fixed ordering
   (that would confound tool identity with position).
 - History conditions: H0 (none), H16N (~16K neutral), H64N (~64K neutral,
-  H16N is its most-recent suffix), H64I (~64K with ~25% of episodes replaced
+  H16N is its most-recent suffix), H64I (~64K with 25% of episodes replaced
   by semantic-interference episodes, matched on length/turns).
 - Final scale: 96 tasks x 4 history conditions x 3 positions = 1,152
   generations per model x 3 models = 3,456 generations.
 - Models: Qwen/Qwen3-30B-A3B-Instruct-2507 (dev + final), openai/gpt-oss-20b,
-  openai/gpt-oss-120b (final only). vLLM or SGLang only, no LangGraph.
+  openai/gpt-oss-120b (final only, both sizes -- not a choice between them).
+  vLLM or SGLang only, no LangGraph.
 - Primary metric: exact correct-tool-name selection (exactly one tool call,
-  name matches gold). Secondary: argument correctness, error taxonomy.
+  name matches gold), implemented in `score.py`. Secondary (argument
+  correctness) is deliberately not implemented -- user's explicit call, not
+  a gap.
+
+**As of Phase 4, all of this is frozen.** The catalog, the 96 final
+questions + gold labels, both interference and neutral episode banks, all
+final-set histories, the full 1,152-condition grid, model configs, and
+scoring/parsing code are hashed in `data/manifests/phase4_freeze.json`. Do
+not edit `data/final/tasks.jsonl`, `data/conditions/final_grid.jsonl`, or
+any `data/histories/assembled/history_final_*.json` file -- if a genuine
+defect turns up, follow the annotation-defect policy in
+`docs/decision_log.md`'s Phase 4 entry (exclude and log, never edit) rather
+than changing a frozen file directly.
+
+## Key files (start here in a fresh session)
+
+- `docs/research_brief.md` — the full experimental design spec. Authoritative.
+- `docs/decision_log.md` — every non-obvious choice made and why, in
+  chronological order. Read this before assuming something is a bug rather
+  than a documented decision.
+- `README.md` — current phase-by-phase implementation status.
+- `data/final/tasks.jsonl` — the 96 frozen final questions (`FinalTaskRecord`).
+- `data/conditions/final_grid.jsonl` — the 1,152 frozen model-input records
+  (`ConditionRecord`) Phase 5 runs over, built by
+  `phase4_build_final_conditions.py`.
+- `data/manifests/phase4_freeze.json` — the freeze manifest (hashes +
+  frozen design parameters), written by `freeze_phase4.py`.
+- `configs/models/*.yaml` — one per model: exact serving command, version
+  pins, and any model-specific quirks (see decision log for why each exists).
+- `src/tool_context_study/run_model.py` — sends conditions to a running
+  server, saves raw + parsed results. `--api-format {chat,responses}` and
+  `--reasoning-effort` are GPT-OSS-only knobs.
+- `src/tool_context_study/score.py` — primary tool-selection scoring.

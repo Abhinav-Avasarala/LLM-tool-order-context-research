@@ -448,12 +448,20 @@ def assemble_all(
     interference_fraction: float,
     tolerance: float = 0.02,
     h64i_tolerance: float | None = None,
+    id_prefix: str = "history",
 ) -> list[AssembledHistory]:
     """`h64i_tolerance` defaults to `tolerance` if not given, but H64I
     construction (matching-based swaps) has strictly more sources of drift
     than H64N/H16N (plain trimming), so callers may want to pass a looser
     value -- the brief itself only asks for "approximately +-2% when
     practical", not a hard 2% cutoff.
+
+    `id_prefix` distinguishes independently-assembled history sets that
+    share the same episode banks (e.g. Phase 3's dev-pilot histories vs.
+    Phase 4's frozen final-set histories) so a later `assemble_all` call
+    with a different `base_seed` never overwrites an earlier one's
+    `data/histories/assembled/*.json` files -- the default reproduces the
+    original Phase 3 dev-pilot ids unchanged.
     """
     h64i_tolerance = tolerance if h64i_tolerance is None else h64i_tolerance
     neutral_pool = load_neutral_pool()
@@ -466,6 +474,7 @@ def assemble_all(
         seed=base_seed,
         token_counter=token_counter,
         token_count_model=token_count_model,
+        history_id=f"{id_prefix}_h64n_base",
     )
     validate_history(h64n)
 
@@ -476,6 +485,7 @@ def assemble_all(
         tolerance=tolerance,
         token_counter=token_counter,
         token_count_model=token_count_model,
+        history_id=f"{id_prefix}_h16n_base",
     )
     validate_history(h16n)
     assert h16n.episode_ids == h64n.episode_ids[-len(h16n.episode_ids) :], (
@@ -495,6 +505,7 @@ def assemble_all(
             seed=base_seed + i + 1,
             token_counter=token_counter,
             token_count_model=token_count_model,
+            history_id=f"{id_prefix}_h64i_{group}",
         )
         validate_history(h64i)
         histories.append(h64i)
@@ -517,6 +528,18 @@ def main() -> None:
         help="Fractional tolerance for H64I vs its base H64N (looser than --tolerance: matching-based "
         "swaps drift more than plain trimming; the brief allows 'approximately +-2%% when practical')",
     )
+    parser.add_argument(
+        "--seed-key",
+        default="base_seed",
+        help="Which configs/experiment.yaml seeds.<key> to use, e.g. 'final_seed' for the Phase 4 "
+        "frozen final-set histories (default: 'base_seed', the Phase 2/3 dev-pilot histories).",
+    )
+    parser.add_argument(
+        "--id-prefix",
+        default="history",
+        help="history_id prefix (default 'history', matching the original dev-pilot ids). Pass "
+        "'history_final' for Phase 4 so these don't overwrite the dev-pilot files.",
+    )
     args = parser.parse_args()
 
     config = load_experiment_config()
@@ -525,11 +548,12 @@ def main() -> None:
     histories = assemble_all(
         token_counter=token_counter,
         token_count_model=args.model,
-        base_seed=config["seeds"]["base_seed"],
+        base_seed=config["seeds"][args.seed_key],
         history_token_targets=config["history_token_targets"],
         interference_fraction=config["interference_fraction"],
         tolerance=args.tolerance,
         h64i_tolerance=args.h64i_tolerance,
+        id_prefix=args.id_prefix,
     )
 
     print(f"{'history_id':<28} {'condition':<7} {'group':<22} {'episodes':>8} {'messages':>9} {'tokens':>8}")

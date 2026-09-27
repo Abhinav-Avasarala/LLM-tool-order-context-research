@@ -1,0 +1,144 @@
+{
+  "frozen_at": "2026-09-27T23:28:09.517374+00:00",
+  "git_commit": "a547d9408ff94185d075a94fdd05e1686f130e28 (dirty working tree)",
+  "frozen_design": {
+    "n_tools": 32,
+    "n_final_questions": 96,
+    "positions": [
+      1,
+      16,
+      32
+    ],
+    "history_conditions": [
+      "H0",
+      "H16N",
+      "H64N",
+      "H64I"
+    ],
+    "history_token_targets": {
+      "H16N": 16000,
+      "H64N": 64000,
+      "H64I": 64000
+    },
+    "interference_fraction": 0.25,
+    "final_seed": 20260927,
+    "n_final_conditions_per_model": 1152
+  },
+  "files": [
+    {
+      "path": "configs/catalog_spec.yaml",
+      "sha256": "0ed6c8a459f321e7333e09f102ce9d5cd9b1f354abefdf39069794884eec0da4",
+      "n_bytes": 4249
+    },
+    {
+      "path": "data/catalog/tools.jsonl",
+      "sha256": "f12cfc2d14c8bf2d0bb0d7961a734bbb9e46bccd55f8eb4e5c34d0da99bb8e29",
+      "n_bytes": 28394
+    },
+    {
+      "path": "data/final/tasks.jsonl",
+      "sha256": "796a1ef5fd15d235993b4fb5bfa583f743d109832a28ad5764b73bffd740d270",
+      "n_bytes": 38843
+    },
+    {
+      "path": "data/conditions/final_grid.jsonl",
+      "sha256": "81de7670c6916b8f429b8bbc73ecfe3bb7e3647040175aada471c6942fa58b1a",
+      "n_bytes": 228903316
+    },
+    {
+      "path": "configs/experiment.yaml",
+      "sha256": "adb5fd44bfee46ba84cc50f6e7ea8b14837f25b88c446f3292382b25fa1d5a94",
+      "n_bytes": 1836
+    },
+    {
+      "path": "src/tool_context_study/score.py",
+      "sha256": "452d042f241634a0a79727e139fce545e7ddb5f76a5aa276231727a63043770d",
+      "n_bytes": 5393
+    },
+    {
+      "path": "data/histories/assembled/history_final_h16n_base.json",
+      "sha256": "dc6619c3be991ccdb4087cee144b6797c183b108c6028bbcc0a2af887186ae9f",
+      "n_bytes": 86305
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_corporate_finance.json",
+      "sha256": "66e5f2f8cf74576ddee5184632db5062e3dfadf2863017737ac4511137d7ed45",
+      "n_bytes": 349204
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_electromagnetism.json",
+      "sha256": "fa1c0741cc9be3f33f6663455ba50fe46c26e3af7c4c33977daea5377c2f7a75",
+      "n_bytes": 363516
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_environmental_impact.json",
+      "sha256": "9c5e9198750ec0020884331ddd83b24f34710207a6da833eaa7a88a491bc785d",
+      "n_bytes": 347781
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_kinematics.json",
+      "sha256": "debe577ca112b118cf54555788ef8af71e6418de6cad383e0771d9e26d4ee753",
+      "n_bytes": 340337
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_personal_finance.json",
+      "sha256": "646597beb499baec96fdbad2fb0fbcb4621b6c95b1096d939b2b9c846862ed9f",
+      "n_bytes": 336600
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_places_and_travel.json",
+      "sha256": "61a3d311a520671dd407d283fb73781f6226e7d39e9bace8d1e24e37c7497a51",
+      "n_bytes": 348287
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_property_and_rentals.json",
+      "sha256": "bd914ed8631dd53af0e89a644977f8d284caf0194abd3363d587840f76a7f614",
+      "n_bytes": 350035
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64i_weather.json",
+      "sha256": "b5eab2b25fd6f77c91f22ef15e36c5f32c694aa5d37844d38517220a0f25c7f9",
+      "n_bytes": 364898
+    },
+    {
+      "path": "data/histories/assembled/history_final_h64n_base.json",
+      "sha256": "98b420d2c345d58cc942b81df6e5153cc30504a3f1da8aabf574dfe2debcf1de",
+      "n_bytes": 341331
+    },
+    {
+      "path": "configs/models/gpt_oss_120b.yaml",
+      "sha256": "f366067a1f9bf38b44589352fee5bf085b011f96dab06aeb272e060ced1d44e9",
+      "n_bytes": 1913
+    },
+    {
+      "path": "configs/models/gpt_oss_20b.yaml",
+      "sha256": "411466774bf743980402507dd132ad715374eabdca1146b190350e48f435a978",
+      "n_bytes": 2305
+    },
+    {
+      "path": "configs/models/qwen3_30b_a3b_instruct_2507_fp8.yaml",
+      "sha256": "a0166d6589e18f73a1d562de170bf56868d7c54e3845a2a92628dd676d988c6c",
+      "n_bytes": 1271
+    },
+    {
+      "path": "src/tool_context_study/parsers/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "n_bytes": 0
+    },
+    {
+      "path": "src/tool_context_study/parsers/harmony_responses_call.py",
+      "sha256": "e4ba0e2184eb1485bd2c84f59a80adc993c5d5ccfaa598d8f911b2558124cb95",
+      "n_bytes": 2654
+    },
+    {
+      "path": "src/tool_context_study/parsers/harmony_token_count.py",
+      "sha256": "4d429a4610efcf4838adf158ed91cb0fb60a03d824ca6a7d6bb99df613a570b3",
+      "n_bytes": 3454
+    },
+    {
+      "path": "src/tool_context_study/parsers/openai_tool_call.py",
+      "sha256": "55a2f6e1564bc5642a8ab86ac82a02b7870e015d5a5d80ebf9dcd7d582cdbc12",
+      "n_bytes": 2119
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+# Final-paper model (brief section 7).
+model_id: "openai/gpt-oss-120b"
+served_model_name: "gpt-oss-120b"
+serving_framework: "vllm"
+vllm_version: "0.10.1.1"   # same env/version as gpt_oss_20b.yaml -- see docs/decision_log.md.
+torch_version: "2.7.1+cu126"
+transformers_version: "<5.0.0,>=4.55.0"
+api_format: "responses"   # same /v1/chat/completions crash + reasoning applies as gpt_oss_20b.yaml;
+                           # see docs/decision_log.md's "Phase 3 (GPT-OSS smoke test)" entry.
+tool_call_parser: null
+reasoning_effort: "low"
+gpu: "2x NVIDIA L40S, tensor-parallel-size 2 (brief section 7: start with two, only move to four on OOM)"
+max_model_len: 8192   # smoke-test scale (H0 only); revisit for H16N/H64N/H64I phases.
+gpu_memory_utilization: 0.85
+enforce_eager: true   # required -- see docs/decision_log.md: without this (+ disable-custom-all-reduce),
+                        # TP=2 startup hangs indefinitely during CUDA-graph capture on this no-NVLink host
+                        # (GPU memory stays flat, workers pinned at 100% CPU, no error -- true deadlock,
+                        # not just a slow first-time compile). Revisit for the final run: eager mode has
+                        # a latency cost at 1,152-generation scale that a smoke test doesn't need to absorb.
+disable_custom_all_reduce: true
+decoding:
+  temperature: 0.0
+  max_tokens: 256
+
+launch_command: >
+  HF_HOME=/home/aavasar/hf_cache CUDA_VISIBLE_DEVICES=2,3 NCCL_P2P_DISABLE=1
+  python -m vllm.entrypoints.openai.api_server
+  --model openai/gpt-oss-120b
+  --served-model-name gpt-oss-120b
+  --tensor-parallel-size 2
+  --max-model-len 8192
+  --gpu-memory-utilization 0.85
+  --enforce-eager
+  --disable-custom-all-reduce
+  --port 8000
+
+run_command: >
+  python -m tool_context_study.run_model
+  --conditions <conditions.jsonl>
+  --model gpt-oss-120b
+  --api-format responses
+  --reasoning-effort low
+  --output <results.jsonl>
