@@ -74,11 +74,30 @@ def score(results: list[ResultRecord], conditions: list[ConditionRecord]) -> dic
             "categories": dict(Counter(r["category"] for r in subset)),
         }
 
+    by_history_condition: dict[str, dict] = {}
+    by_history_condition_and_position: dict[str, dict[int, dict]] = {}
+    for history_condition in sorted({r["history_condition"] for r in rows}):
+        subset = [r for r in rows if r["history_condition"] == history_condition]
+        by_history_condition[history_condition] = {
+            "n": len(subset),
+            "accuracy": sum(r["correct"] for r in subset) / len(subset),
+            "categories": dict(Counter(r["category"] for r in subset)),
+        }
+        by_history_condition_and_position[history_condition] = {}
+        for position in sorted({r["gold_position"] for r in subset}):
+            pos_subset = [r for r in subset if r["gold_position"] == position]
+            by_history_condition_and_position[history_condition][position] = {
+                "n": len(pos_subset),
+                "accuracy": sum(r["correct"] for r in pos_subset) / len(pos_subset),
+            }
+
     return {
         "n_conditions": len(rows),
         "overall_accuracy": overall_accuracy,
         "category_counts": dict(Counter(r["category"] for r in rows)),
         "by_position": by_position,
+        "by_history_condition": by_history_condition,
+        "by_history_condition_and_position": by_history_condition_and_position,
         "rows": rows,
     }
 
@@ -99,6 +118,13 @@ def main() -> None:
     print("by_position:")
     for position, stats in report["by_position"].items():
         print(f"  position {position}: n={stats['n']} accuracy={stats['accuracy']:.3f} categories={stats['categories']}")
+    print("by_history_condition:")
+    for hc, stats in report["by_history_condition"].items():
+        print(f"  {hc}: n={stats['n']} accuracy={stats['accuracy']:.3f} categories={stats['categories']}")
+    print("by_history_condition_and_position:")
+    for hc, by_pos in report["by_history_condition_and_position"].items():
+        row = " ".join(f"p{p}={s['accuracy']:.3f}" for p, s in by_pos.items())
+        print(f"  {hc}: {row}")
     for row in report["rows"]:
         marker = "OK " if row["correct"] else "-- "
         print(f"  {marker}{row['condition_id']}: {row['category']}")

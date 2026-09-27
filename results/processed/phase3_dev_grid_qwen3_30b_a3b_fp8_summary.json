@@ -1,0 +1,138 @@
+{
+  "n_conditions": 288,
+  "overall_accuracy": 0.90625,
+  "category_counts": {
+    "correct": 261,
+    "no_tool_call": 9,
+    "wrong": 7,
+    "multiple_tool_calls": 11
+  },
+  "by_position": {
+    "1": {
+      "n": 96,
+      "accuracy": 0.90625,
+      "categories": {
+        "correct": 87,
+        "wrong": 2,
+        "multiple_tool_calls": 5,
+        "no_tool_call": 2
+      }
+    },
+    "16": {
+      "n": 96,
+      "accuracy": 0.9270833333333334,
+      "categories": {
+        "correct": 89,
+        "wrong": 2,
+        "multiple_tool_calls": 3,
+        "no_tool_call": 2
+      }
+    },
+    "32": {
+      "n": 96,
+      "accuracy": 0.8854166666666666,
+      "categories": {
+        "correct": 85,
+        "no_tool_call": 5,
+        "wrong": 3,
+        "multiple_tool_calls": 3
+      }
+    }
+  },
+  "by_history_condition": {
+    "H0": {
+      "n": 72,
+      "accuracy": 0.9583333333333334,
+      "categories": {
+        "correct": 69,
+        "multiple_tool_calls": 3
+      }
+    },
+    "H16N": {
+      "n": 72,
+      "accuracy": 0.9444444444444444,
+      "categories": {
+        "correct": 68,
+        "multiple_tool_calls": 4
+      }
+    },
+    "H64I": {
+      "n": 72,
+      "accuracy": 0.8611111111111112,
+      "categories": {
+        "correct": 62,
+        "no_tool_call": 5,
+        "wrong": 4,
+        "multiple_tool_calls": 1
+      }
+    },
+    "H64N": {
+      "n": 72,
+      "accuracy": 0.8611111111111112,
+      "categories": {
+        "correct": 62,
+        "no_tool_call": 4,
+        "wrong": 3,
+        "multiple_tool_calls": 3
+      }
+    }
+  },
+  "by_history_condition_and_position": {
+    "H0": {
+      "1": {
+        "n": 24,
+        "accuracy": 0.9583333333333334
+      },
+      "16": {
+        "n": 24,
+        "accuracy": 0.9583333333333334
+      },
+      "32": {
+        "n": 24,
+        "accuracy": 0.9583333333333334
+      }
+    },
+    "H16N": {
+      "1": {
+        "n": 24,
+        "accuracy": 0.9166666666666666
+      },
+      "16": {
+        "n": 24,
+        "accuracy": 0.9583333333333334
+      },
+      "32": {
+        "n": 24,
+        "accuracy": 0.9583333333333334
+      }
+    },
+    "H64I": {
+      "1": {
+        "n": 24,
+        "accuracy": 0.9166666666666666
+      },
+      "16": {
+        "n": 24,
+        "accuracy": 0.875
+      },
+      "32": {
+        "n": 24,
+        "accuracy": 0.7916666666666666
+      }
+    },
+    "H64N": {
+      "1": {
+        "n": 24,
+        "accuracy": 0.8333333333333334
+      },
+      "16": {
+        "n": 24,
+        "accuracy": 0.9166666666666666
+      },
+      "32": {
+        "n": 24,
+        "accuracy": 0.8333333333333334
+      }
+    }
+  }
+}

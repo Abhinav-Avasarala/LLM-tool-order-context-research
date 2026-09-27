@@ -85,3 +85,26 @@ def test_score_computes_overall_and_per_position_accuracy():
     assert report["overall_accuracy"] == 0.75
     assert report["by_position"][1]["accuracy"] == 1.0
     assert report["by_position"][32]["accuracy"] == 0.5
+
+
+def test_score_computes_history_condition_breakdown():
+    conditions = [
+        _condition("t1__H0__p1", "gold_a", gold_position=1),
+        _condition("t1__H64N__p1", "gold_a", gold_position=1),
+        _condition("t2__H0__p1", "gold_b", gold_position=1),
+        _condition("t2__H64N__p1", "gold_b", gold_position=1),
+    ]
+    conditions[1] = conditions[1].model_copy(update={"history_condition": "H64N"})
+    conditions[3] = conditions[3].model_copy(update={"history_condition": "H64N"})
+    results = [
+        _result("t1__H0__p1", "ok", selected_tool="gold_a", tool_calls=[{"function": {"name": "gold_a"}}]),
+        _result("t1__H64N__p1", "ok", selected_tool="wrong", tool_calls=[{"function": {"name": "wrong"}}]),
+        _result("t2__H0__p1", "ok", selected_tool="gold_b", tool_calls=[{"function": {"name": "gold_b"}}]),
+        _result("t2__H64N__p1", "ok", selected_tool="gold_b", tool_calls=[{"function": {"name": "gold_b"}}]),
+    ]
+
+    report = score(results, conditions)
+    assert report["by_history_condition"]["H0"]["accuracy"] == 1.0
+    assert report["by_history_condition"]["H64N"]["accuracy"] == 0.5
+    assert report["by_history_condition_and_position"]["H0"][1]["accuracy"] == 1.0
+    assert report["by_history_condition_and_position"]["H64N"][1]["accuracy"] == 0.5

@@ -19,23 +19,24 @@ chat-template prompt (not just our own condition-builder) preserves all 32
 tool names, in the declared order, with the gold tool at the declared
 position. See `docs/decision_log.md` for choices made along the way
 (notably: vLLM/torch/transformers version pinning for this GPU driver).
-**Phase 3 (catalog curation + dev tasks) — in progress.** Curated and
-user-approved the real 32-tool catalog (4 domains x 2 groups x 4 tools,
-`configs/catalog_spec.yaml` -> `data/catalog/tools.jsonl`), and built the
-24-question development set (`data/development/tasks.jsonl`): 20 questions
-reused from BFCL + 4 freshly authored where BFCL had zero ground-truth
-coverage for a catalog tool (see `docs/decision_log.md`). Generated the
-episode banks: 250 neutral episodes and 440 interference episodes (55 per
-target group x 8 groups) in `data/histories/episodes/`, sized against the
-frozen H64N/H64I token targets rather than the brief's raw episode-count
-guidance (see `docs/decision_log.md` for the sizing math and two corrected
-generation-quality issues). **Not yet done for this data:** the brief's
-required manual review pass over the interference episodes (only automated
-checks have run so far) and the token-count top-up for `personal_finance`,
-the thinnest-margin group. Remaining Phase 3 steps: assembling the four
-history conditions from these banks, and running Qwen/smoke-testing
-GPT-OSS across the dev set. Phases 4-5 (final 96-question set, full model
-runs) are not yet implemented.
+**Phase 3 (catalog curation + dev tasks + history assembly + dev pilot) —
+in progress.** Curated and user-approved the real 32-tool catalog (4
+domains x 2 groups x 4 tools, `configs/catalog_spec.yaml` ->
+`data/catalog/tools.jsonl`), built the 24-question development set (20
+reused from BFCL + 4 freshly authored, see `docs/decision_log.md`),
+generated the episode banks (250 neutral + ~431 interference across 8
+target groups), and assembled + validated all four history conditions
+(H16N, H64N, one H64I per target group). Ran the full 288-condition dev
+grid (24 tasks x H0/H16N/H64N/H64I x positions 1/16/32) on
+Qwen3-30B-A3B-Instruct-2507-FP8: 90.6% overall, with a pattern
+directionally consistent with the brief's hypotheses (accuracy declines as
+history grows; position effects sharpen specifically under H64I). This is
+a small-n pilot, not a result — see `docs/decision_log.md` and
+`results/processed/phase3_dev_grid_qwen3_30b_a3b_fp8_summary.json`.
+**Not yet done:** the brief's required manual review pass over all
+interference episodes (only automated + spot checks so far). Remaining
+Phase 3 step: smoke-test GPT-OSS-20B/120B. Phases 4-5 (final 96-question
+set, full model runs) are not yet implemented.
 
 ## Setup
 

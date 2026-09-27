@@ -201,3 +201,30 @@ interference episodes before they're treated as final, specifically
 checking for subtler cases the regex heuristics can't catch (e.g. an
 episode that gets uncomfortably close to actually answering the
 tool's question in prose without using a flagged phrase).
+
+
+## 2026-09-26 — Phase 3 (dev pilot run)
+
+**Ran the full 288-condition dev grid (24 dev tasks x H0/H16N/H64N/H64I x positions 1/16/32) on Qwen3-30B-A3B-Instruct-2507-FP8.**
+Required relaunching the vLLM server with a much larger context window than
+Phase 2's H0-only setup: measured actual prompt sizes (system + 32-tool
+schemas + history + request) via the real tokenizer/chat template and found
+H64I conditions reach ~72K tokens. Relaunched with `--max-model-len 80000`
+and `--gpu-memory-utilization 0.92` (up from Phase 2's 8192/0.85), giving a
+122,576-token KV cache -- comfortably above the largest observed prompt.
+
+All 288 conditions completed with no inference errors. This is a pilot on
+the *development* set (not the frozen final 96), with only 24 tasks per
+cell -- not a result to draw conclusions from -- but the pattern is worth
+noting because it's directionally consistent with the brief's own
+hypotheses: overall accuracy declined as history grew (H0 0.958 -> H16N
+0.944 -> H64N/H64I 0.861 each), and under H64I specifically, accuracy fell
+further as gold-tool position moved later (p1 0.917 -> p16 0.875 -> p32
+0.792), a steeper decline than the other three history conditions show.
+Full breakdown: `results/processed/phase3_dev_grid_qwen3_30b_a3b_fp8_summary.json`,
+raw per-condition responses: `results/raw/phase3_dev_grid_qwen3_30b_a3b_fp8.jsonl`.
+
+**score.py extended with `by_history_condition` and
+`by_history_condition_and_position` breakdowns** (previously only reported
+by position) -- this is the actual cross-tab the brief's analysis plan
+(section 11) needs, not just a Phase 2 vertical-slice convenience.
