@@ -14,3 +14,10 @@ results/raw/*
 results/processed/*
 !results/raw/.gitkeep
 !results/processed/.gitkeep
+
+# Materialized condition files: fully regenerable from the frozen catalog +
+# tasks + histories + seeds (build_conditions.py / phase4_build_final_conditions.py),
+# and large enough (each row inlines the full history) to blow past GitHub's
+# file-size limits -- e.g. final_grid.jsonl is ~230MB.
+data/conditions/*
+!data/conditions/.gitkeep
