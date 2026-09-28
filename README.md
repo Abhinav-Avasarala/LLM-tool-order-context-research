@@ -3,8 +3,13 @@
 Does an LLM's tool-selection accuracy depend on (1) the correct tool's
 position among the available tool schemas, (2) how much conversation
 history precedes the request, and (3) whether that history is semantically
-interfering? See `docs/research_brief.md` for the full experimental design;
-this README tracks implementation status and setup.
+interfering — and if so, can low-cost, training-free fixes recover the
+lost accuracy? The project has two deliverables, not one: a controlled
+characterization of the effect (Phase 5), and an evaluation of three
+mitigations against an oracle and a retrieval-pruning reference point
+(Phase 6). See `docs/research_brief.md` for the full experimental design
+(sections 1-15 characterization, section 16 mitigations); this README
+tracks implementation status and setup.
 
 ## Status
 
@@ -82,12 +87,57 @@ reaffirmed at 25% (final), and a predefined annotation-defect policy
 frozen design parameters). See `docs/decision_log.md` for full detail on
 every decision above.
 
-**Forward note for Phase 5:** GPT-OSS has only been smoke-tested at
-`--max-model-len 8192` (H0 only) — it needs the same context-window
-increase Qwen already got (to ≥80,000) before it can serve H64N/H64I
-conditions at final scale.
+**GPT-OSS context-window bump (2026-09-28) — done.** Measured actual
+harmony-encoded prompt sizes across the full frozen final grid (largest:
+`final_0014__H64I__p1` at 67,319 tokens); bumped both
+`configs/models/gpt_oss_{20b,120b}.yaml` to `--max-model-len 80000`
+(reusing Qwen's already-proven value) and `--gpu-memory-utilization 0.92`.
+Verified by relaunching both models with the new settings and running the
+grid's single largest condition plus one H0/H16N/H64N condition each
+through `run_model.py` — no inference errors or OOM on either model. See
+`docs/decision_log.md`'s Phase 5 prep entry for full detail, including a
+silent-failure gotcha worth knowing before manually launching a server on
+this host: an env var assignment on its own line in a `bash -c` string
+does not attach to the following command, so `CUDA_VISIBLE_DEVICES` can
+silently fail to apply and vLLM will load onto the wrong GPU with no
+warning.
 
-**Phase 5 (full model runs, analysis) — not yet started.**
+**Phase 5 (full model runs, analysis) — orchestrator built and smoke-tested,
+full run not yet started.** `src/tool_context_study/phase5_run_baseline.py`
+runs the frozen 1,152-condition grid against all three models, sharded
+across multiple idle GPUs per model (see the concurrency entry above for
+why per-GPU concurrency alone isn't enough) — capped at 5 GPUs at once
+(6 only for gpt-oss-120b's tensor-parallel pairing, never more; shared
+host). Resumable: safe to interrupt and re-run, already-completed
+conditions are never resubmitted, and `inference_error`s are retried
+automatically (request-level retry with backoff first, then a full
+replica-cycle retry for anything that still fails). One model failing
+doesn't stop the others -- each phase's results are safely merged to disk
+before the next model starts. Readiness is a real `GET /health` poll, not
+a log-text guess. Verified end-to-end on tiny hand-built grids (sharding,
+concurrent shard execution, merge, resume after a simulated crash,
+per-model failure isolation, score) — see `docs/decision_log.md`'s
+2026-09-28 entries, including two real bugs this caught before they
+touched real data. The actual 9-hour, 3,456-generation run itself hasn't
+been started yet. Progress can be checked anytime without a terminal via
+`results/logs/phase5_status.txt` (current state) or `.jsonl` (full
+timeline):
+
+```bash
+nohup python -m tool_context_study.phase5_run_baseline --max-gpus 5 > phase5.log 2>&1 &
+disown
+```
+
+**Phase 6 (mitigations and reference points) — not yet started.** Newly
+scoped in `docs/research_brief.md` section 16 (this section didn't exist
+until the project proposal PDF was reviewed against the brief — see
+`docs/decision_log.md`). Three mitigations (hierarchical routing,
+permutation voting, history pruning) plus two reference points (oracle,
+retrieval-based tool pruning), run on Qwen and one GPT-OSS model after
+Phase 5's baseline completes — permutation voting specifically reuses
+Phase 5's own generations rather than requiring new ones. Mitigation
+settings get tuned on the development set and frozen before touching the
+final set, same discipline as Phase 4.
 
 ## Setup
 
@@ -175,7 +225,13 @@ python -m tool_context_study.freeze_phase4
 ```
 
 Serve and run a model against any condition file (`--api-format responses
---reasoning-effort low` are GPT-OSS-only; omit both for Qwen):
+--reasoning-effort low` are GPT-OSS-only; omit both for Qwen). `--concurrency`
+(default 16) dispatches requests concurrently so vLLM can continuously
+batch them, but on this single-GPU-per-model hardware it measurably helps
+only for short-history conditions — see `docs/decision_log.md`'s
+2026-09-28 entry: H64N/H64I are prefill-bound and already keep a single
+L40S near-saturated, so concurrency barely moves their wall-clock (0% for
+Qwen, -7% for gpt-oss-20b in a 24-condition benchmark):
 
 ```bash
 python -m tool_context_study.run_model \
@@ -195,7 +251,10 @@ conditions H0/H16N/H64N/H64I, 96-task final set, models) is specified in the
 research brief and must not be silently changed. Any implementation
 constraint that forces a deviation should be documented in
 `docs/decision_log.md` along with its scientific consequences before being
-made.
+made. Phase 4's freeze (`data/manifests/phase4_freeze.json`) covers the
+baseline characterization's inputs only — Phase 6's mitigation settings are
+a separate, later tuning pass on the development set, not yet frozen, and
+must not be tuned on the final set once they are.
 
 ## Repository layout
 
@@ -216,8 +275,10 @@ data/final/tasks.jsonl          96 frozen final questions (FinalTaskRecord) -- d
 data/histories/episodes/        neutral (250) + interference (440, 8 groups) episode banks
 data/histories/assembled/       assembled H64N/H16N/H64I histories --
                                  `history_*` = dev pilot, `history_final_*` = frozen final set
-data/conditions/phase3_dev_grid.jsonl   288-condition dev-pilot grid
-data/conditions/final_grid.jsonl        1,152-condition frozen final grid -- do not edit
+data/conditions/                gitignored: materialized ConditionRecord grids, fully
+                                 regenerable from the frozen inputs above (too large for
+                                 git -- final_grid.jsonl alone is ~230MB). Regenerate with
+                                 build_conditions.py / phase4_build_final_conditions.py.
 
 src/tool_context_study/schemas.py             all project-owned record shapes
 src/tool_context_study/build_histories.py     assembles H64N/H16N/H64I from episode banks
@@ -226,8 +287,12 @@ src/tool_context_study/phase4_build_final_conditions.py   builds the frozen 1,15
 src/tool_context_study/check_interference_episodes.py     automated episode safety checks
 src/tool_context_study/freeze_phase4.py       writes the Phase 4 freeze manifest
 src/tool_context_study/run_model.py           sends conditions to a running server, saves results
+src/tool_context_study/phase5_run_baseline.py Phase 5: shards the full grid across multiple idle
+                                               GPUs per model (capped at 5, 6 max), resumable
 src/tool_context_study/score.py               primary tool-selection scoring
 src/tool_context_study/parsers/               per-API-format response parsers + GPT-OSS token counting
+src/tool_context_study/mitigations/           Phase 6, not yet started: hierarchical routing,
+                                               permutation voting, history pruning, retrieval-pruning baseline
 
 .claude/agents/                 persona files used by subagents that generated project content
                                  (episode banks, final questions) -- kept for reproducibility
@@ -235,5 +300,21 @@ src/tool_context_study/parsers/               per-API-format response parsers + 
 tests/                           unit tests + tiny fixtures (63 as of Phase 4)
 results/raw/                    raw per-condition model responses (gitignored, regenerable)
 results/processed/              scored/aggregated summaries (gitignored, regenerable)
-analysis/                       notebooks (Phase 5, not yet used)
+analysis/                       notebooks (Phase 5/6, not yet used)
 ```
+
+## Implementation attribution
+
+Per the project proposal's deliverable 4: everything under `src/`,
+`configs/`, `tests/`, the catalog curation, the episode banks, the 96 final
+questions, and the mitigations (once built) were implemented for this
+project. Reused as-is, not implemented here: BFCL's tool schemas and
+development-set questions (source material, see `docs/research_brief.md`
+section 4), vLLM/SGLang as the serving framework, and the model weights
+themselves (Qwen3-30B-A3B-Instruct-2507, gpt-oss-20b, gpt-oss-120b). AI
+(Claude Code) was used throughout as the implementation tool, including to
+draft the interference/neutral episode banks and the 96 final questions
+(both under human review and approval before use — see
+`docs/decision_log.md` for the review process and persona files under
+`.claude/agents/`); this section will be extended as Phase 5/6 analysis
+code is added.

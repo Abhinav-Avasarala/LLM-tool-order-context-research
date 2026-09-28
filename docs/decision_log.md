@@ -617,6 +617,66 @@ been smoke-tested at `--max-model-len 8192` (H0 only, per
 context-window increase Qwen already got before it can serve H64N/H64I
 conditions at this size.
 
+## 2026-09-28 — Phase 5 prep: GPT-OSS context-window bump
+
+**Resolved the Phase 4 forward note above.** Measured actual harmony-encoded
+prompt sizes across the full frozen 1,152-condition final grid using
+`count_harmony_input_tokens()` (the same client-side harmony reimplementation
+`run_model.py` already uses to log real token counts, since `/v1/responses`'
+`usage` field is always zero -- see the Phase 3 GPT-OSS smoke-test entry
+above) rather than assuming Qwen's tokenizer figure carries over. Harmony's
+encoding is denser than Qwen's: largest condition is
+`final_0014__H64I__p1` at 67,319 input tokens (vs. Qwen's 71,900 for the
+same condition under its own chat template) -- by history condition,
+maxima are H0 2,720 / H16N 18,136 / H64N 64,372 / H64I 67,319.
+
+**Set `--max-model-len 80000` for both `gpt_oss_20b.yaml` and
+`gpt_oss_120b.yaml`** (up from the 8192 H0-only smoke-test value), reusing
+Qwen's already-proven value rather than shaving margin to the measured
+67,319 + 256-token decode budget -- keeps headroom consistent across all
+three models rather than independently optimizing GPT-OSS's. Also bumped
+`gpu_memory_utilization` 0.85 -> 0.92 (same value Qwen's own bump used) to
+fit the larger KV cache this context length needs.
+
+**Verified, not just configured -- relaunched both models with the new
+settings and ran real requests through `run_model.py`, not only a config
+edit.** gpt-oss-20b (1x L40S, `CUDA_VISIBLE_DEVICES=2`): server started
+cleanly (num_gpu_blocks=72190, no OOM), and a smoke set covering the
+grid's single largest condition (`final_0014__H64I__p1`, 67,319 tokens)
+plus one condition each from H0/H16N/H64N all returned real responses
+(no `inference_error`) -- the H64I request took 29.5s and produced
+`status=no_tool_call` (a legitimate scored outcome at `reasoning_effort:
+low` on a long, distracting context, not an infra failure; the other
+three returned `status=ok` with the correct tool). gpt-oss-120b (2x L40S,
+TP=2, same `--enforce-eager --disable-custom-all-reduce` flags Phase 3's
+smoke test required): started cleanly (GPU KV cache size 165,216 tokens,
+"maximum concurrency for 80,000 tokens per request: 4.02x", no OOM), and
+the same 4-condition smoke set all returned real responses -- no
+`inference_error` on the 67,319-token H64I request (34.6s) or any other.
+3 of the 4 came back `no_tool_call` at `reasoning_effort: low` (vs. 1 of
+4 for gpt-oss-20b on the identical set); this is n=4, not a benchmark,
+and not evidence about 120b-vs-20b quality -- noted only because the
+*pattern* (more non-calls on longer-history conditions) is consistent
+with what Phase 5 is designed to measure, not because 4 datapoints
+support any claim. Both servers shut down immediately after (`nvidia-smi`
+confirmed all GPUs back to idle) per this project's shared-host
+convention.
+
+**Process note:** first launch attempt for gpt-oss-20b put
+`CUDA_VISIBLE_DEVICES=2` on its own line inside a multi-line `bash -c`
+string, separate from the `python -m vllm...` invocation -- since it
+wasn't attached to that command (and wasn't `export`ed), the env var
+never reached the process, and vLLM silently loaded onto GPU 0 instead
+(the shared host's default device, which also already had another user's
+small process on it) instead of the intended idle GPU 2. Caught via
+`/proc/<pid>/environ` and `nvidia-smi --query-compute-apps`, not by any
+vLLM-side warning -- it fails silently. Killed immediately (GPU memory
+confirmed freed via `nvidia-smi` before relaunching) and relaunched with
+`env VAR=val VAR2=val2 python ...` on one command so the env vars actually
+attach to the exec'd process. Worth remembering for any future manual
+launch on this host: `CUDA_VISIBLE_DEVICES` not landing on the target GPU
+fails silently, not loudly.
+
 **Froze the design via `src/tool_context_study/freeze_phase4.py` ->
 `data/manifests/phase4_freeze.json`.** Sha256 + byte count for: the
 catalog spec and normalized catalog, the 96 approved final tasks, the full
@@ -628,3 +688,236 @@ fraction, `final_seed`, 1,152 conditions/model) and the current git commit
 (noted as having a dirty working tree at freeze time, since this work
 hasn't been committed yet -- committing is the user's call, not done
 automatically here). Phase 4 is now complete.
+
+## 2026-09-27 — Mitigations/reference-points scope folded into the brief
+
+**`docs/research_brief.md` was missing an entire deliverable.** The user
+shared the actual project proposal PDF ("Tool Order and Conversation
+Context Effects on LLM Tool Selection, and Practical Fixes") while
+checking whether anything needed to happen before Phase 5. Grepped the
+existing brief/CLAUDE.md/README.md for "mitigation," "oracle,"
+"hierarchical routing," "permutation voting," "history pruning,"
+"retrieval," and "implemented by us" -- zero matches anywhere. Every phase
+implemented so far (1-4) was built entirely from `docs/research_brief.md`,
+which turns out to have only ever covered half the actual proposal (the
+characterization study, sections 1-15) -- the mitigation/fixes half
+(deliverable 2 of the proposal) was never transcribed into it, and the
+brief's own section 1 explicitly said "do not add... retrieval... unless
+explicitly requested later," which reads as a placeholder for exactly this
+that was never filled in.
+
+**Folded the missing scope into `docs/research_brief.md` as new section
+16** (mitigations: hierarchical routing, permutation voting, history
+pruning; reference points: oracle, retrieval-based tool-pruning baseline;
+scope/scale; reporting), a new "Phase 6" in section 13, and additions to
+section 15's fixed/open lists -- transcribed faithfully from the proposal
+rather than inventing specifics it doesn't give (e.g. which single
+GPT-OSS model the mitigation study uses, the exact embedding model, the
+exact history-condition/position subset mitigations run over, are all
+logged as "still open" rather than decided here). Also updated
+`CLAUDE.md` (ground rules: baseline-before-mitigations ordering,
+mitigation-tuning-on-dev-set-only) and `README.md` (project description,
+a new Phase 6 status entry, a `mitigations/` repo-layout entry, and a new
+"Implementation attribution" section for the proposal's deliverable 4).
+
+**Decided: Phase 5 (baseline characterization) runs before Phase 6
+(mitigations), not the reverse or in parallel.** Two concrete dependencies,
+not just a sequencing preference: permutation voting's primary evaluation
+*is* a majority vote over the baseline's own p1/p16/p32 generations for
+each (task, history_condition) pair -- it consumes Phase 5's results
+directly rather than requiring its own model calls for that part. And the
+oracle reference point is simply the baseline's own position-1 accuracy,
+again nothing to compute independently. Mitigation-setting tuning on the
+dev set (hierarchical routing needs none; permutation voting's K=3 is
+already fixed by the proposal; history pruning needs an embedding model
+and to confirm the ~4K token budget) is independent of this ordering and
+can happen before, during, or after Phase 5 -- it only has to finish
+before any mitigation touches the frozen final set.
+
+## 2026-09-28 — run_model.py concurrency, and why it doesn't fix Phase 5's wall-clock
+
+**Added `--concurrency` to `run_model.py`** (default 16): conditions are now
+dispatched via a `ThreadPoolExecutor` against a shared `requests.Session`
+(pooled connections sized to `--concurrency`) instead of one at a time,
+so vLLM's continuous batching actually has multiple requests to batch.
+Results are written as each request completes (not in input order) --
+safe because `score.py` already joins results back to conditions by
+`condition_id`, never by line position. `call_condition`'s default
+`timeout` raised 120s -> 300s since a request can now sit queued behind
+others before vLLM admits it. Correctness verified, not assumed: ran the
+same 24-condition mixed-history set (6 each of H0/H16N/H64N/H64I) through
+both `--concurrency 1` and `--concurrency 8`, on both gpt-oss-20b and
+Qwen3-30B-A3B-FP8 -- identical `(status, selected_tool)` per
+`condition_id` in every case, and every output file had exactly 24 unique
+`condition_id`s (no dropped or duplicated results from the concurrent
+write path).
+
+**However: measured wall-clock showed concurrency does *not* meaningfully
+cut Phase 5's runtime, contrary to the initial hypothesis.** Both models
+served on a single L40S (no TP), `--max-model-len 80000` as bumped above:
+
+| model | concurrency=1 | concurrency=8 |
+|---|---|---|
+| gpt-oss-20b | 5m07s | 4m47s (-7%) |
+| Qwen3-30B-A3B-FP8 | 3m05s | 3m05s (~0%) |
+
+Per-request latency under concurrency=8 didn't drop -- it *rose* sharply
+for the long-history conditions (Qwen H64I: 13.5-14.1s isolated -> up to
+114s concurrent; individual H0 requests that took <1s isolated took
+6-8s concurrent). Total tokens processed stayed constant while wall-clock
+barely moved: this is the signature of a **compute-bound, prefill-
+dominated** workload, not a GPU-idle-time one. Continuous batching's real
+win is overlapping *decode*-phase idle cycles across requests (memory-
+bandwidth-bound, one token at a time) -- it has nothing to overlap when a
+request's cost is dominated by a single one-shot prefill of 16K-80K
+tokens through chunked prefill (`max_num_batched_tokens=2048` by
+default), which already keeps the GPU's tensor cores close to saturated
+on its own. H64N/H64I conditions -- exactly the ones that dominate this
+study's total runtime -- are prefill-dominated by construction (up to
+80K input tokens, only 256 output tokens), so this is true of the actual
+workload, not just this benchmark's slice of it. The original hypothesis
+("GPU likely far from saturated during a single 14s Qwen request") is
+falsified by this measurement, not confirmed.
+
+**Implication for the 9-hour problem this was meant to solve: request
+concurrency on a single GPU is not the lever.** What should actually cut
+wall-clock, not yet built: sharding the condition grid across multiple of
+the host's 8 L40S GPUs, each running its own model server instance on an
+independent subset of conditions -- true parallelism across compute
+budgets, rather than contention for one. This is expected to scale close
+to linearly with GPU count (modulo gpt-oss-120b's TP=2 requirement
+halving how many replicas fit). `--concurrency` is left in `run_model.py`
+regardless (harmless default, real if modest gpt-oss win, and helps more
+on hardware/workloads that are actually decode-idle) but is not, by
+itself, Phase 5's answer.
+
+## 2026-09-28 — Phase 5 orchestrator: GPU sharding, capped for shared-host use
+
+**Built `src/tool_context_study/phase5_run_baseline.py`** to run the frozen
+1,152-condition grid against all three models by sharding across multiple
+idle GPUs per model (the actual lever, per the entry above), instead of
+one server per model at a time. Explicit user requirement, not a default:
+**never uses more than 5 GPUs at once, hard-capped at 6** regardless of
+flags (`--max-gpus`, default 5; `parser.error`s above 6) -- this is a
+shared 8-GPU host and other users' jobs were observed starting and
+stopping mid-session while this work was in progress. The one case
+allowed to reach 6: gpt-oss-120b needs `tensor_parallel_size=2`, so an odd
+cap like the default 5 would otherwise waste a GPU (2 replicas = 4 GPUs,
+1 sitting idle) -- `effective_gpu_cap()` rounds up by exactly one *only*
+when `gpus_per_replica == 2` and the cap is odd, never past 6, and never
+for the single-GPU models. Idle GPUs are queried fresh (`nvidia-smi`) at
+the start of every model phase, not cached from an earlier check, for the
+same reason. Corrected a latent bug while wiring this up: Qwen's own
+`configs/models/qwen3_30b_a3b_instruct_2507_fp8.yaml` had never been
+updated after the Phase 3 dev pilot proved `--max-model-len 80000
+--gpu-memory-utilization 0.92` necessary (still said 8192/0.85) -- harmless
+as long as a human copy-pasted the pilot's real command by hand, but this
+orchestrator reads the field programmatically, so it would have silently
+under-provisioned Qwen's context window. Fixed, and added
+`tensor_parallel_size` / `conda_env` as explicit structured fields to all
+three model configs (previously only in free-text `gpu:`/prose) so the
+orchestrator has one source of truth instead of a second, separately
+-maintained mapping.
+
+Runs one model at a time (never multiple models' servers simultaneously),
+each phase: discover idle GPUs -> launch as many replicas as the cap and
+idle count allow -> shard *unfinished* conditions round-robin across them
+-> run `run_model.py` per shard concurrently -> merge -> score -> shut
+every replica down before the next model. Resumable by design: a
+condition already recorded with any status other than `inference_error`
+is never resubmitted, and retries automatically (`--max-attempts`,
+default 3) within one invocation for genuine failures before raising.
+
+**Caught a real bug in the resume logic via an end-to-end smoke test, not
+by inspection.** First implementation deleted shard files at the *start*
+of each attempt (to avoid double-counting) and only merged them into the
+canonical output *once, at the very end*. Tested by faking a crashed
+prior attempt (deleted the canonical file, left one shard file with 4/8
+conditions already done) and rerunning on a tiny 8-condition grid: the
+already-done conditions got recognized correctly on attempt 1, but their
+evidence (the shard file recording them) was then deleted without ever
+being written anywhere durable, so attempt 2 "forgot" them and reprocessed
+them instead of the real remainder -- oscillating between two overlapping
+4-condition subsets for all 3 attempts and raising `RuntimeError:
+4/8 conditions still unresolved` despite 8/8 actually having succeeded
+across the two attempts, just never in the same file at the same time.
+Fixed by making the merge step (`absorb_shards_into_canonical`) run at
+the *top* of every attempt, not the end -- it's now the only thing that
+touches shard files, always folds them into the canonical file before
+anything gets a chance to overwrite them, and leaves the shard directory
+clean afterward either way. Re-ran the same fault-injection scenario after
+the fix: recovered the 4 pre-existing results, ran only the true
+remaining 4, and completed correctly on the first attempt. Added
+`tests/test_phase5_run_baseline.py::test_absorb_shards_is_cumulative_across_calls`
+as a permanent regression test for this exact failure mode, plus smaller
+tests for the round-robin sharding and the GPU-cap rounding rule. Also
+verified end-to-end against a real gpt-oss-20b server (not just the pure
+functions): 2 replicas on 2 GPUs, correct merge, correct score, and GPUs
+confirmed fully freed after shutdown via `nvidia-smi`.
+
+**Not yet run at full scale.** This has only been exercised on tiny
+(8-condition) hand-built grids so far, specifically to validate the
+sharding/resume/merge machinery in isolation from the ~9-hour real
+runtime. The actual 1,152-condition x 3-model Phase 5 run is still
+pending.
+
+## 2026-09-28 — Phase 5 orchestrator: robustness pass before the real run
+
+Before committing to an unattended 9-hour run, reviewed the design against
+external best-practice suggestions for exactly this scenario (long
+unattended job on a shared GPU host). Agreed with all seven and closed
+three real gaps:
+
+**Request-level retry with backoff, in `run_model.py`'s `call_condition`
+(new `--max-retries`, default 2).** Previously a single connection error
+or timeout immediately recorded `inference_error` with zero retry --
+correct as a last resort, but `phase5_run_baseline.py`'s own retry
+mechanism operates at a much coarser grain (relaunching an entire server
+replica and reprocessing everything still unresolved), which is far too
+heavyweight to invoke over one flaky request. Retries connection errors,
+timeouts, and 5xx with linear backoff; does *not* retry 4xx (a malformed
+request retrying can't fix).
+
+**Real `GET /health` polling in `wait_for_server_ready`, replacing a
+log-text match.** The previous implementation declared a replica ready by
+grepping its log for vLLM's "Application startup complete" string --
+which only proves vLLM printed that line, not that the port is actually
+accepting connections. Now polls the real endpoint (vLLM's OpenAI server
+exposes `/health`, confirmed in its own startup route listing) and
+requires an actual 200; the log-based `FAIL_RE` check is kept alongside
+for *fast failure* (a traceback or OOM message means "never coming up,"
+which a health check alone can't distinguish from "still loading" -- both
+look like connection-refused until the process actually dies).
+
+**Per-model isolation in `main()`.** Previously an exception from any one
+model's `run_model_phase` (or even just a typo in `--models` resolving to
+a missing config file) would crash the entire script, discarding the
+opportunity to attempt the remaining models even though each one's
+completed results are already safely on disk by the time such an
+exception could occur. Now each model runs in its own try/except; a
+failure is logged in full (`traceback.print_exc()`, not just `str(exc)`,
+since this is the one class of error an unattended run can't ask a human
+to reproduce interactively) and the loop moves on. Final summary reports
+succeeded/failed model lists and the process exits 1 iff anything failed
+-- scriptable, and distinct from a clean success. Caught a related bug
+while wiring this up: `load_model_config(model_key)` was called *outside*
+the try block in the original draft, so exactly the "bad --models value"
+case this was meant to guard against would have bypassed the isolation
+entirely -- moved inside.
+
+**A done-signal you can check without a terminal (`write_status`).**
+Previously the only signal of progress was stdout, useless once nobody's
+watching it. Every meaningful milestone (run/model start, replica ready,
+attempt progress, model done/failed, run done) now appends one line to
+`results/logs/phase5_status.jsonl` (full timeline) and overwrites
+`results/logs/phase5_status.txt` (current state, one `cat` away).
+
+**Re-verified end-to-end after all four changes**, on the same tiny
+hand-built grid: `--models does_not_exist,gpt_oss_20b` -- the bad model
+key failed cleanly and was logged without aborting the run, gpt-oss-20b
+then completed normally via the real `/health`-based readiness check
+(confirmed replicas were marked ready only after an actual 200, not a log
+line), the status files captured the whole timeline correctly, and the
+final summary correctly reported `succeeded=['gpt_oss_20b']`,
+`failed=['does_not_exist']`, exit code 1. GPUs confirmed fully freed
+afterward via `nvidia-smi`.

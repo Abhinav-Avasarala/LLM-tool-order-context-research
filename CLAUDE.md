@@ -3,22 +3,32 @@
 Research project (first academic paper) studying whether an LLM's tool-selection
 accuracy depends on (1) the correct tool's position among 32 available tool
 schemas, (2) conversation history length (0/16K/64K tokens), and (3) semantic
-interference in that history. Full spec: `docs/research_brief.md`. Choices
-made along the way, and why: `docs/decision_log.md`. Current implementation
-status: `README.md`.
+interference in that history — **and evaluating low-cost mitigations for
+whatever effect is found.** The project is not just a characterization study;
+"and Practical Fixes" is in the actual project title. Full spec:
+`docs/research_brief.md` (sections 1-15 baseline characterization, section 16
+mitigations). Choices made along the way, and why: `docs/decision_log.md`.
+Current implementation status: `README.md`.
 
 ## Ground rules
 
 - **Do not silently change the experimental design** in `docs/research_brief.md`
   (32-tool catalog, positions 1/16/32, history conditions H0/H16N/H64N/H64I,
-  96-task final set, models). If an implementation constraint forces a
-  deviation, document the proposed change and its scientific consequences in
-  `docs/decision_log.md` before making it — don't just make the call silently.
+  96-task final set, models, section 16's mitigations/reference points). If an
+  implementation constraint forces a deviation, document the proposed change
+  and its scientific consequences in `docs/decision_log.md` before making it —
+  don't just make the call silently.
 - **Development set vs. final set are not interchangeable.** The ~24-question
   BFCL-derived dev set (and the Phase 2 provisional catalog) can be freely
   rebuilt/iterated on. The 96-question final set, once created, is frozen —
   don't rewrite final questions after seeing model failures; log genuine
-  annotation defects and apply a predefined correction policy instead.
+  annotation defects and apply a predefined correction policy instead. **This
+  applies to mitigation settings too**: hierarchical routing, permutation
+  voting, and history pruning must be tuned on the development set only, never
+  on the final set, even though they're evaluated later (Phase 6).
+- **Baseline (Phase 5) before mitigations (Phase 6).** Mitigation recovery is
+  reported against the baseline's own results, and permutation voting reuses
+  the baseline's generations directly — it isn't a separate model run.
 - Log every finalized non-obvious choice (data source pinning, package version
   pins, tool-call parser choice, etc.) in `docs/decision_log.md`, not just in
   code comments or chat.
@@ -98,6 +108,13 @@ actively in use.
   name matches gold), implemented in `score.py`. Secondary (argument
   correctness) is deliberately not implemented -- user's explicit call, not
   a gap.
+- Mitigations (Phase 6, brief section 16): hierarchical routing (domain then
+  tool), permutation voting (K=3, reuses baseline p1/p16/p32 generations),
+  history pruning (embedding retrieval, ~4K token budget, H64N/H64I only).
+  Reference points: oracle (= the baseline's own p1 results, no new
+  generations) and a retrieval-based tool-pruning baseline (top 8 tools by
+  embedding similarity). Runs on Qwen + one GPT-OSS model, not all three --
+  which one is still open.
 
 **As of Phase 4, all of this is frozen.** The catalog, the 96 final
 questions + gold labels, both interference and neutral episode banks, all
@@ -128,3 +145,5 @@ than changing a frozen file directly.
   server, saves raw + parsed results. `--api-format {chat,responses}` and
   `--reasoning-effort` are GPT-OSS-only knobs.
 - `src/tool_context_study/score.py` — primary tool-selection scoring.
+- `src/tool_context_study/mitigations/` — Phase 6 (not yet started): hierarchical
+  routing, permutation voting, history pruning, retrieval-pruning baseline.

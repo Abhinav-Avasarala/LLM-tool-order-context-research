@@ -29,7 +29,9 @@ The model is presented with a conversation, one final user request, and 32 avail
 - **H3 — Interference:** At the same 64K history length, semantically interfering history causes lower accuracy than neutral history.
 - **H4 — Interaction:** Tool-position effects may become larger under long or interfering history.
 
-This is a first-step paper. Do not add multi-step agents, tool execution, retrieval, memory systems, or graph orchestration unless explicitly requested later.
+This is a first-step paper. Do not add multi-step agents, tool execution, memory systems, or graph orchestration. Retrieval is explicitly requested, but only as scoped in section 16 (two of the three mitigations, and the retrieval-pruning reference point) — not as a general-purpose addition to the baseline characterization in sections 1-15.
+
+The project is not only a characterization study. Per the project proposal ("Tool Order and Conversation Context Effects on LLM Tool Selection, and Practical Fixes"), a second, equally real deliverable is evaluating low-cost, training-free mitigations and reporting how much accuracy they recover — see section 16. The baseline characterization (sections 1-15) must run first: the mitigation study evaluates recovery *against* the baseline's own results, and one mitigation (permutation voting) reuses the baseline's generations directly rather than requiring new ones.
 
 ---
 
@@ -592,7 +594,10 @@ tool_context_study/
 │   ├── validate_conditions.py
 │   ├── run_model.py
 │   ├── parsers/
-│   └── score.py
+│   ├── score.py
+│   └── mitigations/       # Phase 6 (section 16): hierarchical routing,
+│                          # permutation voting, history pruning, and the
+│                          # retrieval-pruning reference point
 ├── tests/
 ├── results/
 │   ├── raw/
@@ -652,6 +657,19 @@ Do not generate large histories before this end-to-end slice works.
 4. Produce processed results, confidence intervals, tables, and figures.
 5. Keep a machine-readable record of exclusions and failures.
 
+### Phase 6 — Mitigations and reference points (see section 16)
+
+1. Tune each mitigation's settings on the development set only (never the
+   frozen final set) and log the chosen settings before running any
+   mitigation on final-set data.
+2. Compute the oracle reference point (already implied by the position-1
+   baseline results — see section 16 — no new generations needed).
+3. Run the retrieval-based tool-pruning reference point.
+4. Run all three mitigations (hierarchical routing, permutation voting,
+   history pruning) on the frozen final set, on Qwen and one GPT-OSS model.
+5. Report each mitigation's recovered accuracy and added compute cost
+   against the Phase 5 baseline and the oracle.
+
 ---
 
 ## 14. First instructions for the coding agent
@@ -695,6 +713,22 @@ Do not begin the 96-task final set or large-scale history generation until this 
 - Use correct tool-name percentage as the primary metric.
 - Do not execute tools.
 - Do not use LangGraph.
+- Evaluate three mitigations (section 16): hierarchical routing, permutation
+  voting (K=3), history pruning via embedding retrieval (~4K token budget).
+- Compare mitigations against two reference points: an oracle (correct tool
+  always at position 1 — already available from the baseline's own p1
+  results, no separate run needed) and a retrieval-based tool-pruning
+  baseline (top 8 tools by embedding similarity).
+- Mitigations run on Qwen and *one* GPT-OSS model, not both — which one is
+  still open (see below).
+- Mitigation settings must be chosen on the development set and frozen
+  before any mitigation touches the final set — the same "no tuning on the
+  test set" discipline section 3 already requires for the baseline.
+- The project README must mark which pipeline components were implemented
+  for this project (catalog construction, history assembly/validation,
+  condition builder, runner, scoring, mitigations, analysis) as a deliverable,
+  distinct from reused external material (BFCL schemas/questions, vLLM,
+  model weights).
 
 ### Still open and must be decided during development
 
@@ -705,5 +739,90 @@ Do not begin the 96-task final set or large-scale history generation until this 
 - Exact model revisions and quantization artifacts.
 - Whether Qwen requires more than one L40S at the chosen 64K serving configuration.
 - The predefined policy for rare final-set annotation defects.
+- Which single GPT-OSS model (20b or 120b) the mitigation study uses.
+- The embedding model for history pruning and the retrieval-pruning
+  reference point (must not be one of the three evaluated models).
+- The exact subset of history conditions x positions each mitigation is
+  evaluated over on the final set (the proposal gives "a few thousand
+  generations per model" as a scale target, not an exact cross-product).
+- Whether permutation voting's "fresh random orderings to confirm" run
+  reuses the frozen final set's existing permutation-seed scheme or needs
+  its own seeds.
 
 Record each finalized choice in a decision log rather than leaving it implicit in code.
+
+---
+
+## 16. Mitigations and reference points
+
+Per the project proposal, characterizing the problem is half the
+deliverable — the other half is evaluating low-cost, training-free fixes
+and reporting how much accuracy they recover, and comparing them against
+two reference points. This section is scoped as **Phase 6**, strictly
+after the Phase 5 baseline characterization (section 13) — see the note
+at the end of section 1 for why the ordering matters.
+
+### Mitigations
+
+All three are chosen and tuned on the **development set only**, then
+frozen and logged (matching section 3's dev/final discipline) before
+running on the final set.
+
+1. **Hierarchical routing.** The model first picks one of the 4 domains,
+   then picks among that domain's 8 tools. This shrinks the candidate set
+   instead of reordering it — a different kind of intervention from the
+   reordering studied in prior work (Chen 2026) — and uses structure
+   already built into the catalog (brief section 2's domain/group
+   hierarchy).
+2. **Permutation voting.** Present the same 32 tools in K=3 different
+   orderings and take the majority tool. This targets position sensitivity
+   directly. The baseline's own p1/p16/p32 conditions (same task, same
+   history condition) already are three orderings per task, so the
+   baseline runs can be reused for the vote directly — no new generations
+   required for this part. Also run fresh random orderings to confirm the
+   result holds beyond the specific p1/p16/p32 permutations already used.
+3. **History pruning.** For `H64N` and `H64I` only, an embedding retriever
+   keeps only the episodes most relevant to the final request (about 4K
+   tokens) before the model call, replacing the full history. This should
+   remove much of `H64I`'s distractor material specifically. Report
+   honestly if recovery is only partial — this is a real empirical
+   question, not an assumed win.
+
+Because Chen (2026) found that prompt-side repairs recover little of
+BFCL's tool-selection failures on smaller tool lists without long
+histories, treat that as a hypothesis to test under this project's long
+and interfering histories, not as a settled result these mitigations must
+match or beat.
+
+### Reference points
+
+- **Oracle.** The correct tool always placed first. This is *already*
+  what the baseline's position-1 conditions measure — report it as the
+  oracle reference rather than running anything new.
+- **Retrieval-based tool-pruning baseline.** Keep only the top 8 tools by
+  embedding similarity to the request (not the full 32), then run
+  inference over that reduced set. This is a *different* axis from the
+  history-pruning mitigation above (that one prunes history episodes; this
+  one prunes the tool list itself) and exists to show how much a
+  retriever's own errors cost when used as a naive tool-selection shortcut,
+  not to be evaluated as one of the three mitigations proper.
+
+### Scope and scale
+
+The mitigation study runs on Qwen and *one* GPT-OSS model (not all three),
+adding on the order of a few thousand generations per model on top of the
+3,456-generation baseline (permutation voting's primary evaluation reuses
+baseline generations and adds comparatively little; hierarchical routing
+and history pruning need fresh generations across some subset of the final
+set's history conditions x positions).
+
+### Reporting
+
+Report each mitigation's recovered accuracy (relative to the Phase 5
+baseline, for the matching model/history condition/position cells) and
+its added compute cost, alongside the oracle and retrieval-pruning
+reference points. If a mitigation only partially recovers accuracy, or a
+history-condition/position combination shows no meaningful baseline effect
+at all, report that plainly — per the proposal, a documented null result
+for the mitigation comparison is an acceptable, honest outcome, not a
+failure to fix before writing up.

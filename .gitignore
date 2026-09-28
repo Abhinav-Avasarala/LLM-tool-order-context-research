@@ -12,8 +12,10 @@ data/raw/bfcl/*
 # Large generated artifacts (recreated by later phases).
 results/raw/*
 results/processed/*
+results/logs/*
 !results/raw/.gitkeep
 !results/processed/.gitkeep
+!results/logs/.gitkeep
 
 # Materialized condition files: fully regenerable from the frozen catalog +
 # tasks + histories + seeds (build_conditions.py / phase4_build_final_conditions.py),

@@ -2,6 +2,8 @@
 model_id: "openai/gpt-oss-20b"
 served_model_name: "gpt-oss-20b"
 serving_framework: "vllm"
+conda_env: "tool_ctx_gptoss"   # server only -- the client (run_model.py) always runs under tool_ctx.
+tensor_parallel_size: 1
 vllm_version: "0.10.1.1"   # first vLLM release with GptOssForCausalLM in ModelRegistry (0.10.0 predates it);
                             # see docs/decision_log.md for why this exact patch version, not the 0.30.0 default.
 torch_version: "2.7.1+cu126"   # same cu126 pin/reasoning as Qwen (configs/models/qwen3_30b_a3b_instruct_2507_fp8.yaml);
@@ -17,8 +19,16 @@ tool_call_parser: null   # not applicable/needed: vLLM auto-detects gpt-oss via 
 reasoning_effort: "low"   # brief section 7: fixed to low for this direct-selection task;
                            # passed per-request via run_model.py's --reasoning-effort low.
 gpu: "1x NVIDIA L40S (CUDA_VISIBLE_DEVICES pinned to a single idle GPU on the shared host)"
-max_model_len: 8192   # smoke-test scale (H0 only); revisit for H16N/H64N/H64I phases.
-gpu_memory_utilization: 0.85
+max_model_len: 80000   # bumped from the 8192 H0-only smoke-test value for H16N/H64N/H64I;
+                         # measured via count_harmony_input_tokens() over the full frozen final
+                         # grid: largest condition (final_0014__H64I__p1) is 67,319 harmony-encoded
+                         # input tokens (lower than Qwen's 71,900 for the same condition under its
+                         # own tokenizer -- harmony's encoding is denser). 80000 reuses the exact
+                         # value already proven safe for Qwen (docs/decision_log.md, Phase 3 dev
+                         # pilot) rather than shaving margin, and comfortably covers 67,319 +
+                         # 256-token decode budget. See docs/decision_log.md's Phase 5 prep entry.
+gpu_memory_utilization: 0.92   # bumped from 0.85 to fit the larger KV cache this context length
+                                # needs, same value Qwen's own bump used.
 decoding:
   temperature: 0.0
   max_tokens: 256   # passed as max_output_tokens under api_format=responses
@@ -28,8 +38,8 @@ launch_command: >
   python -m vllm.entrypoints.openai.api_server
   --model openai/gpt-oss-20b
   --served-model-name gpt-oss-20b
-  --max-model-len 8192
-  --gpu-memory-utilization 0.85
+  --max-model-len 80000
+  --gpu-memory-utilization 0.92
   --port 8000
 
 run_command: >
